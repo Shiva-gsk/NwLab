@@ -38,31 +38,6 @@ void write_to_file(int conn_sock_fd) {
     printf("[INFO] Data written to file successfully.\n");
 }
 
-void send_file(int sockfd) {
-    // Open the file from the data is being read
-    FILE *fp;
-    const char *filename="t1.txt";
-    fp = fopen(filename, "r");
-    if (fp == NULL) {
-        perror("[-]Error in opening file.");
-        exit(1);
-    }
-    char data[BUFF_SIZE] = {0};
-    printf("[INFO] Sending data to server...\n");
-
-    while (fgets(data, BUFF_SIZE, fp) != NULL) {
-        if (send(sockfd, data, strlen(data), 0) == -1) {
-            perror("[-]Error in sending data.");
-            fclose(fp); // Ensure file is closed on error
-            exit(1);
-        }
-        printf("[FILE DATA] %s", data);
-        bzero(data, BUFF_SIZE); // clear the buffer
-    }
-    printf("[INFO] File data sent successfully.\n");
-    fclose(fp); // Close the file after sending
-}
-
 
 int main() {
   // Creating listening sock
@@ -95,8 +70,7 @@ int main() {
     int conn_sock_fd = accept(listen_sock_fd, (struct sockaddr *)&client_addr, &client_addr_len);
     printf("[INFO] Client connected to server\n");
     
-    // write_to_file(conn_sock_fd);
-    send_file(conn_sock_fd);
+    write_to_file(conn_sock_fd);
     
     close(conn_sock_fd);
   }

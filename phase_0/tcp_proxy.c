@@ -175,11 +175,6 @@ void handle_upstream(int upstream_sock_fd) {
 
 }
 
-
-
-
-
-
 void loop_run(int epoll_fd) {
   while (1) {
     printf("[DEBUG] Epoll wait\n");

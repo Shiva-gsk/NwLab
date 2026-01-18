@@ -55,7 +55,7 @@ int main() {
 
     // Set server address parameters
     server_addr.sin_family = AF_INET;  // IPv4
-    server_addr.sin_addr.s_addr = INADDR_ANY; // Any incoming interface
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY); // Any incoming interface
     server_addr.sin_port = htons(PORT);     // Server port
 
     // Bind the socket to the server address
