@@ -1,6 +1,8 @@
 #include  "../xps.h"
 
 void connection_loop_read_handler(void *ptr);
+void connection_loop_write_handler(void *ptr);
+void connection_loop_close_handler(void *ptr);
 
 void strrev(char *str) {
   for (int start = 0, end = strlen(str) - 2; start < end; start++, end--) {
@@ -19,13 +21,17 @@ xps_connection_t *xps_connection_create(xps_core_t *core, u_int sock_fd) {
   }
 
   /* attach sock_fd to epoll */
-   xps_loop_attach(core->loop, sock_fd, EPOLLIN, connection, connection_loop_read_handler);
+  //Changed in S8
+   //xps_loop_attach(core->loop, sock_fd, EPOLLIN, connection, connection_loop_read_handler);
+   // Inside xps_connection_create() in xps_connection.c
+  xps_loop_attach(core->loop, sock_fd, EPOLLIN | EPOLLOUT, connection, connection_loop_read_handler, connection_loop_write_handler, connection_loop_close_handler);
 
   // Init values
   connection->core = core;
   connection->sock_fd = sock_fd;
   connection->listener = NULL;
   connection->remote_ip = get_remote_ip(sock_fd);
+  connection->write_buff_list = xps_buffer_list_create(); //Added in S8
 
   /* add connection to 'connections' list */
     vec_push(&(core->connections), connection);
@@ -100,20 +106,80 @@ void connection_loop_read_handler(void *ptr) {
   printf("[CLIENT MESSAGE]: %s", buff);
   /* reverse client message */
   strrev(buff);
+  /* create a buffer containing the reversed message and append it to the
+     connection write buffer list so the write handler will send it */
+  xps_buffer_t *response_buffer = xps_buffer_create(read_n, read_n, NULL);
+  if (response_buffer == NULL) {
+    logger(LOG_ERROR, "xps_connection_read_handler()", "xps_buffer_create() failed");
+    xps_connection_destroy(connection);
+    return;
+  }
 
-  // Sending reversed message to client
-  long bytes_written = 0;
-  long message_len = read_n;
-  while (bytes_written < message_len) {
-    long write_n = send(connection->sock_fd, buff + bytes_written, message_len - bytes_written, 0);
-    if (write_n < 0) {
-      logger(LOG_ERROR, "xps_connection_read_handler()", "send() failed");
+  /* copy reversed data into the newly created buffer */
+  memcpy(response_buffer->data, buff, read_n);
+
+  /* append to connection's write list; the write handler will pick it up */
+  xps_buffer_list_append(connection->write_buff_list, response_buffer);
+
+  /* done — do not send here (write handler will perform send()) */
+}
+
+void connection_loop_write_handler(void *ptr) {
+  assert(ptr != NULL);
+  xps_connection_t *connection = ptr;
+
+  /* validate params */
+  if (connection == NULL) {
+    logger(LOG_ERROR, "xps_connection_write_handler()", "invalid 'connection' parameter");
+    return;
+  }
+
+  xps_buffer_list_t *wb_list = connection->write_buff_list;
+  if (wb_list == NULL)
+    return;
+
+  /* nothing to send */
+  if (wb_list->len == 0)
+    return;
+
+  /* read the entire length available in the buffer list */
+  size_t to_read = wb_list->len;
+  xps_buffer_t *send_buff = xps_buffer_list_read(wb_list, to_read);
+  if (send_buff == NULL) {
+    logger(LOG_ERROR, "xps_connection_write_handler()", "xps_buffer_list_read() failed");
+    return;
+  }
+
+  /* attempt to send the buffer */
+  ssize_t sent = send(connection->sock_fd, send_buff->data, send_buff->len, 0);
+  if (sent < 0) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      /* kernel buffer full; try again later — just free the temporary buffer */
+      xps_buffer_destroy(send_buff);
+      return;
+    } else {
+      /* unrecoverable send error -> destroy connection */
+      logger(LOG_ERROR, "xps_connection_write_handler()", "send() failed");
       perror("Error message");
+      xps_buffer_destroy(send_buff);
       xps_connection_destroy(connection);
       return;
     }
-    bytes_written += write_n;
   }
+
+  /* on success, clear the sent bytes from write buffer list and free temp */
+  if (sent > 0) {
+    xps_buffer_list_clear(wb_list, (size_t)sent);
+  }
+
+  xps_buffer_destroy(send_buff);
+}
+
+void connection_loop_close_handler(void *ptr) {
+  assert(ptr != NULL);
+  xps_connection_t *connection = ptr;
+  logger(LOG_INFO, "connection_loop_close_handler()", "Closing connection with %s", connection->remote_ip);
+  xps_connection_destroy(connection);
 }
 
 //Removed in S7

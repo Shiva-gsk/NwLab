@@ -82,3 +82,22 @@ char *get_remote_ip(u_int sock_fd) {
 
   return ip_str;
 }
+
+void vec_filter_null(vec_void_t *v) {
+  assert(v != NULL);
+
+  vec_void_t temp;
+  vec_init(&temp);
+
+  for (int i = 0; i < v->length; i++) {
+    void *curr = v->data[i];
+    if (curr != NULL)
+      vec_push(&temp, curr);
+  }
+
+  vec_clear(v);
+  for (int i = 0; i < temp.length; i++)
+    vec_push(v, temp.data[i]);
+
+  vec_deinit(&temp);
+}

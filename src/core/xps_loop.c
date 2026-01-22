@@ -102,7 +102,7 @@ void xps_loop_destroy(xps_loop_t *loop) {
  * @param read_cb : Callback function to be called on a read event
  * @return : OK on success and E_FAIL on error
  */
-int xps_loop_attach(xps_loop_t *loop, u_int fd, int event_flags, void *ptr, xps_handler_t read_cb) {
+int xps_loop_attach(xps_loop_t *loop, u_int fd, int event_flags, void *ptr, xps_handler_t read_cb, xps_handler_t write_cb, xps_handler_t close_cb) {
   assert(loop != NULL);
   assert(ptr != NULL);
 
@@ -200,6 +200,19 @@ void xps_loop_run(xps_loop_t *loop) {
         if (curr_event->read_cb != NULL)
           // Pass the ptr from loop_event_t as a parameter to the callback
           curr_event->read_cb(curr_event->ptr);
+      }
+
+       if(curr_epoll_event.events & (EPOLLERR | EPOLLHUP)) {
+        logger(LOG_DEBUG, "handle_epoll_events()", "EVENT / error/hangup");
+        // Handle error/hangup event
+        // For now, just detach the event
+        xps_loop_detach(loop, curr_event->fd);
+      }
+
+      if(curr_epoll_event.events & EPOLLOUT) {
+        logger(LOG_DEBUG, "handle_epoll_events()", "EVENT / write");
+        // Handle write event
+        // Currently not implemented
       }
     }
   }
