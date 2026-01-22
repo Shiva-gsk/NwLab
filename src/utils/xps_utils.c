@@ -1,8 +1,9 @@
 #include  "../xps.h"
-#include <fcntl.h>
-#include <errno.h>
-#define OK 0
-#define E_FAIL -1
+// //Added Extra rather than from docs
+// #include <fcntl.h>
+// #include <errno.h>
+// #define OK 0
+// #define E_FAIL -1
 
 
 bool is_valid_port(u_int port) { return port >= 0 && port <= 65535; }
