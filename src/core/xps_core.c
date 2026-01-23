@@ -11,6 +11,11 @@ xps_core_t *xps_core_create() {
 
   xps_loop_t *loop = xps_loop_create(core);
   /* handle error where loop == NULL */
+  if (loop == NULL) {
+    logger(LOG_ERROR, "xps_core_create()", "xps_loop_create() failed");
+    free(core);
+    return NULL;
+  }
 
   // Init values
   core->loop = loop;
@@ -29,9 +34,11 @@ xps_core_t *xps_core_create() {
 //NTLB-SEG FAULT HERE
 void xps_core_destroy(xps_core_t *core) {
   assert(core != NULL);
-  printf("In xps_core_destroy()\n");
+  // printf("In xps_core_destroy()\n");
   // Destroy connections
-  for (int i = 0; i < core->connections.length; i++) {         //Problem HERE
+  int len = core->connections.length;
+  for (int i = 0; i < len; i++) {         //Problem HERE
+    // printf("In xps_core_destroy()\n");
     xps_connection_t *connection = core->connections.data[i]; 
     if (connection != NULL) {
       logger(LOG_DEBUG, "xps_core_destroy()", "destroying connection %d", i);
@@ -39,13 +46,18 @@ void xps_core_destroy(xps_core_t *core) {
     }
   }
   vec_deinit(&(core->connections));
-
+  
   /* destory all the listeners and de-initialize core->listeners */
-  for (int i = 0; i < core->listeners.length; i++) {
+  len = core->listeners.length;
+  printf("In xps_core_destroy(), number of listeners: %d\n", len);
+  for (int i = 0; i < len; i++) {
+    
     xps_listener_t *listener = core->listeners.data[i];
     if (listener != NULL) {
+      printf("In xps_core_destroy() for listener %d\n", i);
       logger(LOG_DEBUG, "xps_core_destroy()", "destroying listener %d", i);
       xps_listener_destroy(listener); 
+      printf("In xps_core_destroy()\n");
     }
   }
   vec_deinit(&(core->listeners));
@@ -70,6 +82,7 @@ void xps_core_start(xps_core_t *core) {
 
   /* create listeners from port 8001 to 8004 */
   for (u_int port = 8001; port <= 8004; port++) {
+
     xps_listener_t *listener = xps_listener_create(core, "0.0.0.0", port);
     /* handle error where listener == NULL */
     if (listener == NULL) {
@@ -78,6 +91,13 @@ void xps_core_start(xps_core_t *core) {
     }
     vec_push(&(core->listeners), listener);
     logger(LOG_INFO, "xps_core_start()", "Server listening on port %u", port);
+  }
+
+  for(int i=0; i<core->listeners.length; i++) {
+    xps_listener_t *listener = core->listeners.data[i];
+    if (listener != NULL) {
+      logger(LOG_DEBUG, "xps_core_start()", "Active listener on port %u", listener->port);
+    }
   }
 
   /* run loop instance using xps_loop_run() */

@@ -68,8 +68,6 @@ xps_listener_t *xps_listener_create(xps_core_t *core, const char *host, u_int po
   // Attach listener to loop
   xps_loop_attach(core->loop, sock_fd, EPOLLIN, listener, listener_connection_handler);
 
-  // Add listener to global listeners list
-  vec_push(&(core->listeners), listener);
 
   logger(LOG_DEBUG, "xps_listener_create()", "created listener on port %d", port);
 
@@ -80,27 +78,31 @@ xps_listener_t *xps_listener_create(xps_core_t *core, const char *host, u_int po
 void xps_listener_destroy(xps_listener_t *listener) {
 
   // Validate params
-  assert(listener != NULL);
-
+  printf("1");
+  // assert(listener != NULL);
   // Detach listener from loop
   xps_loop_detach(listener->core->loop, listener->sock_fd);
-
+  printf("2");
+  xps_core_t *core = listener->core;
+  core->n_null_listeners++;
+  printf("3");
   // Set listener to NULL in 'listeners' list
-  for (int i = 0; i < listener->core->listeners.length; i++) {
-    xps_listener_t *curr = listener->core->listeners.data[i];
+  for (int i = 0; i < core->listeners.length; i++) {
+    printf("4 %d\n", i);
+    xps_listener_t *curr = core->listeners.data[i];
     if (curr == listener) {
-      listener->core->listeners.data[i] = NULL;
+      core->listeners.data[i] = NULL;
       break;
     }
   }
-
   // Close socket
   close(listener->sock_fd);
-
+  
   logger(LOG_DEBUG, "xps_listener_destroy()", "destroyed listener on port %d", listener->port);
-
+  
   // Free listener instance
   free(listener);
+  printf("5");
 
 }
 
