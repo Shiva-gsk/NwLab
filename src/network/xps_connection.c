@@ -120,7 +120,7 @@ void connection_loop_read_handler(void *ptr) {
 
   /* append to connection's write list; the write handler will pick it up */
   xps_buffer_list_append(connection->write_buff_list, response_buffer);
-
+  
   /* done — do not send here (write handler will perform send()) */
 }
 

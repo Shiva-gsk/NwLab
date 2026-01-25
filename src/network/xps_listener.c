@@ -69,7 +69,7 @@ xps_listener_t *xps_listener_create(xps_core_t *core, const char *host, u_int po
   xps_loop_attach(core->loop, sock_fd, EPOLLIN, listener, listener_connection_handler, NULL, NULL);
 
   // Add listener to global listeners list
-  vec_push(&(core->listeners), listener);
+  // vec_push(&(core->listeners), listener);
 
   logger(LOG_DEBUG, "xps_listener_create()", "created listener on port %d", port);
 
