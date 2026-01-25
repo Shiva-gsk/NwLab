@@ -1,6 +1,6 @@
 #include "../xps.h"
 
-loop_event_t *loop_event_create(u_int fd, void *ptr, xps_handler_t read_cb) {
+loop_event_t *loop_event_create(u_int fd, void *ptr, xps_handler_t read_cb, xps_handler_t write_cb, xps_handler_t close_cb) {
   assert(ptr != NULL);
 
   // Alloc memory for 'event' instance
@@ -14,6 +14,8 @@ loop_event_t *loop_event_create(u_int fd, void *ptr, xps_handler_t read_cb) {
   event->fd = fd;
   event->ptr = ptr;
   event->read_cb = read_cb;
+  event->write_cb= write_cb;
+  event->close_cb= close_cb;
 
   logger(LOG_DEBUG, "event_create()", "created event");
 
@@ -107,7 +109,7 @@ int xps_loop_attach(xps_loop_t *loop, u_int fd, int event_flags, void *ptr, xps_
   assert(ptr != NULL);
 
   /* fill this */
-  loop_event_t * event = loop_event_create(fd, ptr, read_cb);
+  loop_event_t * event = loop_event_create(fd, ptr, read_cb, write_cb, close_cb);
   if (event == NULL) {
     return E_FAIL;
   }
@@ -213,6 +215,7 @@ void xps_loop_run(xps_loop_t *loop) {
         logger(LOG_DEBUG, "handle_epoll_events()", "EVENT / write");
         // Handle write event
         // Currently not implemented
+        curr_event->write_cb(curr_event->ptr);
       }
     }
   }

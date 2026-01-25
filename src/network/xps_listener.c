@@ -121,6 +121,8 @@ void listener_connection_handler(void *ptr) {
     return;
   }
 
+  make_socket_non_blocking(conn_sock_fd); 
+  
   // Creating connection instance
   xps_connection_t *client = xps_connection_create(listener->core, conn_sock_fd); // Will be implemented later
   if (client == NULL) {
