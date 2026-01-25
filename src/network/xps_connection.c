@@ -202,6 +202,7 @@ void connection_loop_read_handler(void* ptr) {
 }
 
 void connection_loop_write_handler(void* ptr) {
+  logger(LOG_DEBUG, "connection_loop_write_handler()", "Setting write_ready to true ");
     assert(ptr != NULL);
    /*set write_ready flag to true*/
   xps_connection_t *connection = ptr;
