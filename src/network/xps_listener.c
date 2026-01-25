@@ -66,10 +66,11 @@ xps_listener_t *xps_listener_create(xps_core_t *core, const char *host, u_int po
   listener->sock_fd = sock_fd;
 
   // Attach listener to loop
-  xps_loop_attach(core->loop, sock_fd, EPOLLIN, listener, listener_connection_handler, NULL, NULL);
+  // xps_loop_attach(core->loop, sock_fd, EPOLLIN, listener, listener_connection_handler, NULL, NULL);
+  xps_loop_attach(core->loop, sock_fd, EPOLLIN | EPOLLET, listener, listener_connection_handler, NULL, NULL);
 
   // Add listener to global listeners list
-  vec_push(&(core->listeners), listener);
+  // vec_push(&(core->listeners), listener);
 
   logger(LOG_DEBUG, "xps_listener_create()", "created listener on port %d", port);
 
@@ -111,24 +112,26 @@ void listener_connection_handler(void *ptr) {
   /* same code logic from xps_listener_connection_handler() */
   struct sockaddr conn_addr;
   socklen_t conn_addr_len = sizeof(conn_addr);
-
+  
+  
   // Accepting connection
   // Done
-  int conn_sock_fd = accept(listener->sock_fd, &conn_addr, &conn_addr_len);
-  if (conn_sock_fd < 0) {
-    logger(LOG_ERROR, "xps_listener_connection_handler()", "accept() failed");
-    perror("Error message");
-    return;
-  }
+  while(1){
+    int conn_sock_fd = accept(listener->sock_fd, &conn_addr, &conn_addr_len);
+    if (conn_sock_fd < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+      break;
+        
+    make_socket_non_blocking(conn_sock_fd); // Make the accepted socket non-blocking
 
-  // Creating connection instance
-  xps_connection_t *client = xps_connection_create(listener->core, conn_sock_fd); // Will be implemented later
-  if (client == NULL) {
-    logger(LOG_ERROR, "xps_listener_connection_handler()", "xps_connection_create() failed");
-    close(conn_sock_fd);
-    return;
+    // Creating connection instance
+    xps_connection_t *client = xps_connection_create(listener->core, conn_sock_fd); // Will be implemented later
+    if (client == NULL) {
+      logger(LOG_ERROR, "xps_listener_connection_handler()", "xps_connection_create() failed");
+      close(conn_sock_fd);
+      return;
+    }
+    client->listener = listener;
   }
-  client->listener = listener;
 
   logger(LOG_INFO, "xps_listener_connection_handler()", "new connection");
 

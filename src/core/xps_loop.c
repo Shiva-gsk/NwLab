@@ -158,15 +158,54 @@ int xps_loop_detach(xps_loop_t *loop, u_int fd) {
 }
 
 
+bool handle_connections(xps_loop_t* loop) {
+    int len = loop->core->connections.length;
+    for (int i=0; i<len; i++) {
+        xps_connection_t* connection = loop->core->connections.data[i];
+        if(connection == NULL)
+          continue;
+        if (connection->read_ready == true)
+            connection->recv_handler(connection);
+             
+            //check if connection still exists 
+            if(connection == NULL)
+              continue;
+
+        if (connection->write_ready == true && connection->write_buff_list->len > 0)
+            connection->send_handler(connection);
+    }
+
+    for (int i=0; i<len; i++) {
+        xps_connection_t* connection = loop->core->connections.data[i];
+
+        
+        /*check if connection is NULL and continue if it is*/
+        if(connection == NULL)
+          continue;
+        if (connection->read_ready == true)
+            return true;
+
+        if (connection->write_ready == true && connection->write_buff_list->len > 0)
+            return true;
+    }
+
+    return false;
+}
+
+
 void xps_loop_run(xps_loop_t *loop) {
   /* Validate params */
   assert(loop != NULL);
   logger(LOG_INFO, "xps_loop_run()", "starting event loop");
 
   while (1) {
+    bool has_ready_connections = handle_connections(loop);
+    /*set timeout to 0 if there are any ready connections else set to -1*/
+    int timeout = -1;
+    if(has_ready_connections) timeout = 0;
     logger(LOG_DEBUG, "xps_loop_run()", "epoll wait");
     //Done
-    int n_events = epoll_wait(loop->epoll_fd, loop->epoll_events, MAX_EPOLL_EVENTS, -1);
+    int n_events = epoll_wait(loop->epoll_fd, loop->epoll_events, MAX_EPOLL_EVENTS, timeout);
     logger(LOG_DEBUG, "xps_loop_run()", "epoll wait over");
 
     logger(LOG_DEBUG, "xps_loop_run()", "handling %d events", n_events);
@@ -212,6 +251,9 @@ void xps_loop_run(xps_loop_t *loop) {
       if(curr_epoll_event.events & EPOLLOUT) {
         logger(LOG_DEBUG, "handle_epoll_events()", "EVENT / write");
         // Handle write event
+        if (curr_event->write_cb != NULL)
+          // Pass the ptr from loop_event_t as a parameter to the callback
+          curr_event->write_cb(curr_event->ptr);
         // Currently not implemented
       }
     }
