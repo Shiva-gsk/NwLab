@@ -9,6 +9,8 @@ struct xps_core_s {
   vec_void_t connections;
   u_int n_null_listeners;
   u_int n_null_connections;
+  vec_void_t pipes;
+  u_int n_null_pipes;
 };
 
 xps_core_t *xps_core_create();
