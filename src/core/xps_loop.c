@@ -162,58 +162,64 @@ int xps_loop_detach(xps_loop_t *loop, u_int fd) {
 bool handle_pipes(xps_loop_t *loop) {
     assert(loop != NULL);
     for (int i = 0; i < loop->core->pipes.length; i++) {
-    xps_pipe_t *pipe = loop->core->pipes.data[i];
-    if (pipe == NULL)
+      logger(LOG_DEBUG, "handle_pipes()", "checking pipe %d", i);
+      xps_pipe_t *pipe = loop->core->pipes.data[i];
+      if (pipe == NULL)
+          continue;
+      logger(LOG_DEBUG, "handle_pipes()", "Readable: %d", xps_pipe_is_readable(pipe));
+      logger(LOG_DEBUG, "handle_pipes()", "Writable: %d", xps_pipe_is_writable(pipe));
+      /*Destroy the pipe if it has no source and sink and continue*/
+      if(pipe->source == NULL && pipe->sink == NULL) {
+        logger(LOG_DEBUG, "handle_pipes()", "pipe has no source and sink, destroying pipe");
+        xps_pipe_destroy(pipe);
         continue;
-        
-    /*Destroy the pipe if it has no source and sink and continue*/
-    if(pipe->source == NULL && pipe->sink == NULL) {
-      logger(LOG_DEBUG, "handle_pipes", "pipe has no source and sink, destroying pipe");
-      xps_pipe_destroy(pipe);
-      continue;
-    }
-    
-    if (pipe->source != NULL &&  xps_pipe_is_writable(pipe)) {     
-      logger(LOG_DEBUG, "handle_pipes", "pipe source is ready and pipe is writable");  
-      pipe->source->handler_cb(pipe->source);//call connection_source_handler to write into  pipe
-    }
+      }
+      
+      if (pipe->source != NULL &&  xps_pipe_is_writable(pipe)) {     
+        logger(LOG_DEBUG, "handle_pipes()", "pipe source is ready and pipe is writable");  
+        pipe->source->handler_cb(pipe->source);//call connection_source_handler to write into  pipe
+      }
 
-    if (pipe->sink != NULL && xps_pipe_is_readable(pipe)) {
-      pipe->sink->handler_cb(pipe->sink);//call connection_sink_handler to read from pipe
-    }
-    //NTLB: Review the below conditions
-    if (pipe->source == NULL && pipe->sink == NULL) {
-      pipe->source->active = false;
-      pipe->source->close_cb(pipe->source);
-  }
+      if (pipe->sink != NULL && xps_pipe_is_readable(pipe)) {
+        logger(LOG_DEBUG, "handle_pipes()", "pipe sink is ready and pipe is readable");
+        pipe->sink->handler_cb(pipe->sink);//call connection_sink_handler to read from pipe
+      }
+      //NTLB: Review the below conditions
+      if (pipe->source != NULL && pipe->sink == NULL) {
+        logger(LOG_DEBUG, "handle_pipes()", "pipe has no source and sink, destroying pipe");
+        pipe->source->active = false;
+        pipe->source->close_cb(pipe->source);
+      }
 
-    if (pipe->sink != NULL && pipe->source == NULL && !xps_pipe_is_readable(pipe)) {
-        pipe->sink->active = false;
-        pipe->sink->close_cb(pipe->sink);
-    }
+      if (pipe->sink != NULL && pipe->source == NULL && !xps_pipe_is_readable(pipe)) {
+          logger(LOG_DEBUG, "handle_pipes()", "pipe has no source and sink is not readable, closing sink");
+          pipe->sink->active = false;
+          pipe->sink->close_cb(pipe->sink);
+      }
     
     }
 
     for (int i = 0; i < loop->core->pipes.length; i++) {
-    xps_pipe_t *pipe = loop->core->pipes.data[i];
-    if (pipe == NULL){
-      logger(LOG_DEBUG, "handle_pipes", "pipe is null");
-      continue;
+      xps_pipe_t *pipe = loop->core->pipes.data[i];
+      if (pipe == NULL){
+        logger(LOG_DEBUG, "handle_pipes", "pipe is null");
+        continue;
+      }
+      if (pipe->source != NULL && pipe->source->ready && xps_pipe_is_writable(pipe)) {       
+        return true;
+      }
+      if (pipe->sink != NULL && pipe->sink->ready && xps_pipe_is_readable(pipe)) {
+        return true;
+      }
+      if (pipe->source != NULL && pipe->sink == NULL) {
+        return true;
+      }
+      //NTLB
+      if (pipe->sink != NULL && pipe->source == NULL && !xps_pipe_is_readable(pipe)) {
+        return true;
+      }
     }
-    if (pipe->source != NULL && xps_pipe_is_writable(pipe)) {       
-      return true;
-    }
-    if (pipe->sink != NULL && xps_pipe_is_readable(pipe)) {
-      return true;
-    }
-    if (pipe->source != NULL && pipe->sink == NULL) {
-      return true;
-    }
-    //NTLB
-    if (pipe->sink != NULL && pipe->source == NULL && !xps_pipe_is_readable(pipe)) {
-      return true;
-    }
-    }
+    logger(LOG_DEBUG, "handle_pipes()", "no ready pipes found");
     return false;
 }
 
@@ -268,9 +274,8 @@ void handle_epoll_events(xps_loop_t *loop, int n_events) {
       if (curr_epoll_event.events & EPOLLIN) {
         logger(LOG_DEBUG, "handle_epoll_events()", "EVENT / read");
         if (curr_event->read_cb != NULL)
-          // Pass the ptr from loop_event_t as a parameter to the callback
           curr_event->read_cb(curr_event->ptr);
-      }
+        }
 
        if(curr_epoll_event.events & (EPOLLERR | EPOLLHUP)) {
         logger(LOG_DEBUG, "handle_epoll_events()", "EVENT / error/hangup");
@@ -339,6 +344,7 @@ void xps_loop_run(xps_loop_t *loop) {
 
     // Handle pipes
     bool has_ready_pipes = handle_pipes(loop);
+    logger(LOG_DEBUG, "xps_loop_run()", "handled pipes, has_ready_pipes=%d", has_ready_pipes ? 1 : 0);
 
     int timeout = has_ready_pipes ? 0 : -1;
 

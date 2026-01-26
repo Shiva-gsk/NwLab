@@ -63,9 +63,9 @@ void xps_pipe_destroy(xps_pipe_t *pipe) {
 }
 
 //NTLB: Review these functions later for correctness
-bool xps_pipe_is_readable(xps_pipe_t *pipe) { return pipe->sink->ready && pipe->buff_list->len > 0; }
+bool xps_pipe_is_readable(xps_pipe_t *pipe) { return pipe->buff_list->len > 0; }
 
-bool xps_pipe_is_writable(xps_pipe_t *pipe) { return pipe->source->ready && pipe->buff_list->len < pipe->buff_thresh; }
+bool xps_pipe_is_writable(xps_pipe_t *pipe) { return pipe->buff_list->len < pipe->buff_thresh; }
     
 
 int xps_pipe_attach_source(xps_pipe_t *pipe, xps_pipe_source_t *source) {

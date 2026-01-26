@@ -139,7 +139,7 @@ void connection_read_handler(void *ptr) {
 
     if(errno == EAGAIN || errno == EWOULDBLOCK){
       logger(LOG_INFO, "xps_connection_read_handler()", "recv() would block, try again later");
-      connection->source->active = false;
+      connection->source->ready = false;
       return;
     }
     else{ //if error is something else
@@ -212,7 +212,7 @@ void connection_write_handler(void *ptr) {
   if (write_n < 0) {
     if(errno == EAGAIN || errno == EWOULDBLOCK){
         logger(LOG_INFO, "xps_connection_write_handler()", "send() would block, try again later");
-        connection->sink->active = false;
+        connection->sink->ready = false;
         return;
       }
       else{ //if error is something else
@@ -239,10 +239,11 @@ void connection_loop_close_handler(void *ptr) {
 }
 
 void connection_loop_read_handler(void* ptr) {
+  logger(LOG_DEBUG, "connection_loop_read_handler()", "Setting read_ready to true ");
     assert(ptr != NULL);
 	  /*set read_ready flag to true*/
   xps_connection_t *connection = ptr;
-  connection->source->active = true;
+  connection->source->ready = true;
 }
 
 void connection_loop_write_handler(void* ptr) {
@@ -250,7 +251,7 @@ void connection_loop_write_handler(void* ptr) {
     assert(ptr != NULL);
    /*set write_ready flag to true*/
   xps_connection_t *connection = ptr;
-  connection->sink->active = true;
+  connection->sink->ready = true;
 }   
 
 void connection_source_handler(void *ptr) {
@@ -268,18 +269,17 @@ void connection_source_handler(void *ptr) {
     /*Read from socket using recv()*/
     int read_n = recv(connection->sock_fd, buff->data, DEFAULT_BUFFER_SIZE, 0);
     buff->len = read_n;
-
+    logger(LOG_DEBUG, "connection_source_handler()", "recv() read %d bytes", read_n);
     // Socket would block
     if (read_n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
       xps_buffer_destroy(buff);
-      connection->source->active = false;
+      connection->source->ready = false;
       return;
     }
 
     // Socket error
     if (read_n < 0) {
       xps_buffer_destroy(buff);
-      connection->source->active = false;
       logger(LOG_ERROR, "connection_source_handler()", "recv() failed");
       connection_close(connection, false);
       return;
@@ -288,7 +288,6 @@ void connection_source_handler(void *ptr) {
     // Peer closed connection
     if (read_n == 0) {
       xps_buffer_destroy(buff);
-      connection->source->active = false;
       connection_close(connection, true);
       return;
     }
@@ -323,10 +322,18 @@ void connection_sink_handler(void *ptr) {
     xps_pipe_sink_t *sink = ptr;
     xps_connection_t *connection = sink->ptr;
 
-    xps_buffer_t *buff = xps_buffer_create(DEFAULT_BUFFER_SIZE, 0, NULL);
+    // First, read data from the pipe
+    size_t available = sink->pipe->buff_list->len;
+    if (available == 0) {
+        logger(LOG_DEBUG, "connection_sink_handler()", "no data available in pipe");
+        return;
+    }
+
+    // Read from pipe into buffer
+    xps_buffer_t *buff = xps_pipe_sink_read(sink, available);
     if (buff == NULL) {
-    logger(LOG_ERROR, "connection_sink_handler()", "xps_pipe_sink_read() failed");
-    return;
+        logger(LOG_ERROR, "connection_sink_handler()", "xps_pipe_sink_read() failed");
+        return;
     }
 
     // Write to socket
@@ -338,7 +345,7 @@ void connection_sink_handler(void *ptr) {
     // Socket would block
     if (write_n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
     /*sink made not ready*/
-      connection->sink->active = false;
+      connection->sink->ready = false;
     return;
     }
 
@@ -354,7 +361,7 @@ void connection_sink_handler(void *ptr) {
       return;
 
     if (xps_pipe_sink_clear(connection->sink, write_n) != OK)
-    logger(LOG_ERROR, "connection_sink_handler()", "failed to clear %d bytes from sink", write_n);
+      logger(LOG_ERROR, "connection_sink_handler()", "failed to clear %d bytes from sink", write_n);
 }
 
 void connection_sink_close_handler(void *ptr) {
