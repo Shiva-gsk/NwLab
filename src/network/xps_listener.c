@@ -142,7 +142,13 @@ void listener_connection_handler(void *ptr) {
       xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, upstream->source, client->sink);
       logger(LOG_INFO, "xps_listener_connection_handler()", "Upstream connection created to 127.0.0.1:3000");
 
-    } else {
+    }
+    else if (listener->port == 8002) {
+      int error;
+      xps_file_t *file = xps_file_create(listener->core, "../public/sample.txt", &error);
+      xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, file->source, client->sink);
+    }
+    else {
       /* same as previous stages*/
       xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, client->source, client->sink);
 

@@ -27,7 +27,7 @@ xps_connection_t *xps_upstream_create(xps_core_t *core, const char *host, u_int 
         logger(LOG_ERROR, "xps_listener_create()", "xps_getaddrinfo() failed");
         close(sock_fd);
         return NULL;
-    }    
+    }       
     // Connecting to upstream
     int connect_error = connect(sock_fd, addr_info->ai_addr, addr_info->ai_addrlen);
     freeaddrinfo(addr_info); 
