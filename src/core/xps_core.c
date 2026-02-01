@@ -54,10 +54,8 @@ void xps_core_destroy(xps_core_t *core) {
     
     xps_listener_t *listener = core->listeners.data[i];
     if (listener != NULL) {
-      printf("In xps_core_destroy() for listener %d\n", i);
       logger(LOG_DEBUG, "xps_core_destroy()", "destroying listener %d", i);
       xps_listener_destroy(listener); 
-      printf("In xps_core_destroy()\n");
     }
   }
   vec_deinit(&(core->listeners));
