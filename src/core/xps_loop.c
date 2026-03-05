@@ -196,6 +196,14 @@ void xps_loop_run(xps_loop_t *loop) {
         continue;
       }
 
+      if(curr_epoll_event.events & (EPOLLERR | EPOLLHUP)) {
+       logger(LOG_DEBUG, "handle_epoll_events()", "EVENT / error/hangup");
+       // Handle error/hangup event
+       // For now, just detach the event
+       xps_loop_detach(loop, curr_event->fd);
+       continue;
+     }
+
       // Read event
       if (curr_epoll_event.events & EPOLLIN) {
         logger(LOG_DEBUG, "handle_epoll_events()", "EVENT / read");
@@ -204,18 +212,25 @@ void xps_loop_run(xps_loop_t *loop) {
           curr_event->read_cb(curr_event->ptr);
       }
 
-       if(curr_epoll_event.events & (EPOLLERR | EPOLLHUP)) {
-        logger(LOG_DEBUG, "handle_epoll_events()", "EVENT / error/hangup");
-        // Handle error/hangup event
-        // For now, just detach the event
-        xps_loop_detach(loop, curr_event->fd);
+      // Check if event still exists. Could have been destroyed due to read_cb
+      curr_event_idx = -1;
+      for (u_int j = 0; j < loop->events.length; j++) {
+        if (loop->events.data[j] == curr_event) {
+          curr_event_idx = j;
+          break;
+        }
+      }
+
+      if (curr_event_idx == -1) {
+        continue;
       }
 
       if(curr_epoll_event.events & EPOLLOUT) {
         logger(LOG_DEBUG, "handle_epoll_events()", "EVENT / write");
         // Handle write event
         // Currently not implemented
-        curr_event->write_cb(curr_event->ptr);
+        if (curr_event->write_cb != NULL)
+            curr_event->write_cb(curr_event->ptr);
       }
     }
   }
