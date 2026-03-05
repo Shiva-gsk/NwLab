@@ -61,7 +61,7 @@ int main() {
 		}
 
 		// Print message from cilent
-		printf("[SERVER MESSAGE] %s\n", buff);
+		printf("[SERVER MESSAGE] %s", buff);
 	}
 
   return 0;
