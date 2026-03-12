@@ -292,6 +292,8 @@ void connection_source_handler(void *ptr) {
       return;
     }
 
+    logger(LOG_INFO, "connection_source_handler()", "Received message from %s: %.*s", connection->remote_ip, read_n, buff->data);
+
     if (xps_pipe_source_write(connection->source, buff) != OK) {
       logger(LOG_ERROR, "connection_source_handler()", "xps_pipe_source_write() failed");
       /*destroy buff*/
