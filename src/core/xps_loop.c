@@ -175,12 +175,12 @@ bool handle_pipes(xps_loop_t *loop) {
         continue;
       }
       
-      if (pipe->source != NULL &&  xps_pipe_is_writable(pipe)) {     
+      if (pipe->source != NULL && pipe->source->ready && xps_pipe_is_writable(pipe)) {     
         logger(LOG_DEBUG, "handle_pipes()", "pipe source is ready and pipe is writable");  
         pipe->source->handler_cb(pipe->source);//call connection_source_handler to write into  pipe
       }
 
-      if (pipe->sink != NULL && xps_pipe_is_readable(pipe)) {
+      if (pipe->sink != NULL && pipe->sink->ready && xps_pipe_is_readable(pipe)) {
         logger(LOG_DEBUG, "handle_pipes()", "pipe sink is ready and pipe is readable");
         pipe->sink->handler_cb(pipe->sink);//call connection_sink_handler to read from pipe
       }
@@ -243,6 +243,10 @@ void filter_nulls(xps_core_t *core) {
         vec_filter_null(&core->pipes);
         core->n_null_pipes = 0;
     }
+  if(core->n_null_sessions > DEFAULT_NULLS_THRESH) {
+    vec_filter_null(&core->sessions);
+    core->n_null_sessions = 0;
+  }
 }
 
 void handle_epoll_events(xps_loop_t *loop, int n_events) {

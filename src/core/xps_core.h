@@ -11,6 +11,8 @@ struct xps_core_s {
   u_int n_null_connections;
   vec_void_t pipes;
   u_int n_null_pipes;
+  vec_void_t sessions;
+  u_int n_null_sessions;
 };
 
 xps_core_t *xps_core_create();
