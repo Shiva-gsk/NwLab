@@ -97,5 +97,7 @@ typedef void (*xps_handler_t)(void *ptr);
 #include "disk/xps_mime.h"
 #include "disk/xps_file.h"
 #include "core/xps_session.h"
+#include "http/xps_http.h"
+#include "http/xps_http_req.h"
 
 #endif
