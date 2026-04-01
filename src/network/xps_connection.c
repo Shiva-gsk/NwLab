@@ -100,8 +100,9 @@ void xps_connection_read_handler(xps_connection_t *connection) {
   char saved_char = buff[log_len];
   buff[log_len] = '\0';
 
-  /* print client message */
-  logger(LOG_INFO, "xps_connection_read_handler()", "Received message from %s: %s", connection->remote_ip, buff);
+  /* log client origin and echo raw message separately */
+  logger(LOG_INFO, "xps_connection_read_handler()", "Received message from %s", connection->remote_ip);
+  printf("[CLIENT MESSAGE]: %.*s\n", (int)log_len, buff);
 
   buff[log_len] = saved_char;
 
