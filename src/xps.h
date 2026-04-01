@@ -8,8 +8,12 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <signal.h>
 #include <fcntl.h>
@@ -49,6 +53,8 @@ struct xps_buffer_list_s;
 struct xps_pipe_s;
 struct xps_pipe_source_s;
 struct xps_pipe_sink_s;
+struct xps_file_s;
+struct xps_keyval_s;
 
 // Struct typedefs
 typedef struct xps_core_s xps_core_t;
