@@ -147,6 +147,7 @@ xps_session_t *xps_session_create(xps_core_t *core, xps_connection_t *client) {
 
 void client_source_handler(void *ptr) {
   /* validate parameters */
+  assert(ptr != NULL);
 
   xps_pipe_source_t *source = ptr;
   xps_session_t *session = source->ptr;
