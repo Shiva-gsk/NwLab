@@ -92,8 +92,18 @@ void xps_connection_read_handler(xps_connection_t *connection) {
 
   buff[read_n] = '\0';
 
+  /* strip trailing newlines for cleaner logging */
+  size_t log_len = read_n;
+  while (log_len > 0 && (buff[log_len - 1] == '\n' || buff[log_len - 1] == '\r')) {
+    log_len--;
+  }
+  char saved_char = buff[log_len];
+  buff[log_len] = '\0';
+
   /* print client message */
   logger(LOG_INFO, "xps_connection_read_handler()", "Received message from %s: %s", connection->remote_ip, buff);
+
+  buff[log_len] = saved_char;
 
   /* reverse client message */
   strrev(buff);
