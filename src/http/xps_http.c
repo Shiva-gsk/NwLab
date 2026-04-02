@@ -51,12 +51,21 @@ int xps_http_parse_request_line(xps_http_req_t *http_req, xps_buffer_t *buff) {
       case RL_SP_AFTER_METHOD:
         if (ch == '/') {
           /*assign start and end of schema,host,port and start of uri,path,pathname*/
+          http_req->schema_start = http_req->schema_end = http_req->host_start = http_req->host_end = http_req->port_start = http_req->port_end = NULL;
+          http_req->uri_start = p_ch;
+          http_req->path_start = p_ch;
+          http_req->pathname_start = p_ch;
+          
           
           /*next state is RL_PATH*/
+          parser_state = RL_PATH;
         } else {
           char c = ch | 0x20; //convert to lower case
           /*if lower case alphabets, assign start of schema and uri, next state is RL_SCHEMA*/
           /*if not space(''), fails*/
+          http_req->schema_start = http_req->uri_start = p_ch;
+          parser_state = RL_SCHEMA;
+
         }
         break;
 
@@ -64,14 +73,31 @@ int xps_http_parse_request_line(xps_http_req_t *http_req, xps_buffer_t *buff) {
         /*on lower case alphabets break ie schema can have lower case alphabets*/
         /*schema ends on ':' ,next state is RL_SCHEMA_SLASH*/
         /*fails on all other inputs*/
+        if (ch == ':') {
+          http_req->schema_end = p_ch;
+          parser_state = RL_SCHEMA_SLASH;
+        }
+        else{
+          char c = ch | 0x20; //convert to lower case
+          if (c < 'a' || c > 'z') {
+            return E_FAIL;
+          }
+        }
         break;
 
       case RL_SCHEMA_SLASH:
         /*on '/' assign next state, fails on all other inputs*/
+        if (ch == '/') {
+          parser_state = RL_SCHEMA_SLASH_SLASH;
+        }
         break;
 
       case RL_SCHEMA_SLASH_SLASH:
         /*on '/' - assign next state, for start of host assign next position, fails on all other inputs*/
+        if(ch == '/'){
+          parser_state = RL_HOST_START;
+          http_req->host_start = p_ch + 1;
+        }
         break;
 
       case RL_HOST:
@@ -80,6 +106,31 @@ int xps_http_parse_request_line(xps_http_req_t *http_req, xps_buffer_t *buff) {
         /*on '/' - host ends, assign start of path,pathname, end of port, next state is RL_PATH*/
         /*on ' ' - host ends, assign end of uri, start and end of port,path,pathname, next state is RL_VERSION_START*/
         /*on all other input, fails*/
+        if(ch == ':'){
+          http_req->host_end = p_ch;
+          parser_state = RL_PORT;
+          http_req->port_start = p_ch + 1;
+        }
+        else if(ch == '/'){
+          http_req->host_end = p_ch;
+          http_req->port_end = p_ch;
+          http_req->path_start = p_ch;
+          http_req->pathname_start = p_ch;
+          parser_state = RL_PATH;
+        }
+        else if(ch == ' '){
+          http_req->host_end = p_ch;
+          http_req->port_end = p_ch;
+          http_req->path_start = p_ch;
+          http_req->pathname_start = p_ch;
+          parser_state = RL_VERSION_START;
+        }
+        else{
+          char c = ch | 0x20; //convert to lower case
+          if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '.')) {
+            return E_FAIL;
+          }
+        }
         break;
 
       case RL_PORT:
@@ -87,51 +138,133 @@ int xps_http_parse_request_line(xps_http_req_t *http_req, xps_buffer_t *buff) {
         /*on '/' - port ends, assign start of path,pathname, next state is RL_PATH*/
         /*on ' ' - port ends, assign end of uri, start and end of path,pathname, next state is RL_VERSION_START*/
         /*on all other input, fails*/
+        if(ch == '/'){
+          http_req->port_end = p_ch;
+          http_req->path_start = p_ch+1;
+          http_req->pathname_start = p_ch+1;
+          parser_state = RL_PATH;
+        }
+        else if(ch == ' '){
+          http_req->port_end = p_ch;
+          http_req->path_start = p_ch;
+          http_req->pathname_start = p_ch;
+          parser_state = RL_VERSION_START;
+        }
+        else{
+          if (ch < '0' || ch > '9') {
+            return E_FAIL;
+          }
+        }
         break;
 
       case RL_PATH:
         /*on ' ' - path ends, assign end of path,pathname,uri next state is RL_VERSION_START*/
         /*on '?'or'&'or'='or'#' - assign end of pathname, next state is RL_PATHNAME*/
         /*on CR or LF, fails*/
+        if(ch == ' '){
+          http_req->path_end = p_ch;
+          http_req->pathname_end = p_ch;
+          parser_state = RL_VERSION_START;
+        }
+        else if(ch == '?' || ch == '&' || ch == '='){
+          http_req->pathname_end = p_ch;
+          parser_state = RL_PATHNAME;
+        }
+        else{
+          if (ch == CR || ch == LF) {
+            return E_FAIL;
+          }
+        }
         break;
 
       case RL_PATHNAME:
         /*on ' ' - assign end of uri,path, next state is RL_VERSION_START*/
         /*on CR or LF, fails*/
+        if(ch == ' '){
+          http_req->path_end = p_ch;
+          http_req->pathname_end = p_ch;
+          parser_state = RL_VERSION_START;
+        }
+        else{
+          if (ch == CR || ch == LF) {
+            return E_FAIL;
+          }
+        }
         break;
 
       case RL_VERSION_START:
         /*can have space*/
         /*on 'H' - next state is RL_VERSION_H*/
         /*fails on all other input*/
+        if (ch == 'H') {
+          parser_state = RL_VERSION_H;
+        } else if (ch != ' ') {
+          return E_FAIL;
+        }
         break;
 
       case RL_VERSION_H:
         /*fill this*/
+        if (ch == 'T') {
+          parser_state = RL_VERSION_HT;
+        } else {
+          return E_FAIL;
+        }
         break;
 
       case RL_VERSION_HT:
         /*fill this*/
+        if (ch == 'T') {
+          parser_state = RL_VERSION_HTT;
+        } else {
+          return E_FAIL;
+        }
         break;
 
       case RL_VERSION_HTT:
         /*fill this*/
+        if (ch == 'P') {
+          parser_state = RL_VERSION_HTTP;
+        } else {
+          return E_FAIL;
+        }
+
         break;
 
       case RL_VERSION_HTTP:
         /*fill this*/
+        if (ch == '/') {
+          parser_state = RL_VERSION_HTTP_SLASH;
+        } else {
+          return E_FAIL;
+        }
         break;
 
       case RL_VERSION_HTTP_SLASH:
         /*on '1' - assign major, next state is RL_MAJOR, fails on all other inputs*/
+        if (ch == '1') {
+          parser_state = RL_VERSION_MAJOR;
+        } else {
+          return E_FAIL;
+        }
         break;
 
       case RL_VERSION_MAJOR:
         /*fill ths*/
+        if (ch == '.') {
+          parser_state = RL_VERSION_DOT;
+        } else {
+          return E_FAIL;
+        }
         break;
 
       case RL_VERSION_DOT:
         /*on '0' or '1' - assign minor to next position, next state is RL_VERSION_MINOR, fails on other inputs*/
+        if (ch == '0' || ch == '1') {
+          parser_state = RL_VERSION_MINOR;
+        } else {
+          return E_FAIL;
+        }
         break;
 
       case RL_VERSION_MINOR:
@@ -146,6 +279,11 @@ int xps_http_parse_request_line(xps_http_req_t *http_req, xps_buffer_t *buff) {
 
       case RL_CR:
         /*fill this*/
+          if (ch == LF) {
+            parser_state = RL_LF;
+          } else {
+            return E_FAIL;
+          }
         break;
 
       case RL_LF:
