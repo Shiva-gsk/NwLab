@@ -57,7 +57,7 @@ struct xps_file_s;
 struct xps_keyval_s;
 struct xps_session_s;
 struct xps_http_req_s;
-struct xps_http_parser_state_s;
+
 
 // Struct typedefs
 typedef struct xps_core_s xps_core_t;
@@ -73,7 +73,6 @@ typedef struct xps_file_s xps_file_t;
 typedef struct xps_keyval_s xps_keyval_t;
 typedef struct xps_session_s xps_session_t;
 typedef struct xps_http_req_s xps_http_req_t;
-typedef enum xps_http_parser_state_s xps_http_parser_state_t;
 
 
 // Function typedefs

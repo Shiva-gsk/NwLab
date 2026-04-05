@@ -157,19 +157,16 @@ void file_source_handler(void *ptr) {
 
   // Checking for read errors
   if (ferror(file->file_struct)) {
-	  /*destroy buff, file and return*/
-    logger(LOG_ERROR, "file_source_handler()", "fread() failed for file: %s", file->file_path);
     xps_buffer_destroy(buff);
-    xps_file_destroy(file);
+    source->ready = false;
     return;
   }
 
   // If end of file reached
   if (read_n == 0 && feof(file->file_struct)) {
-    /*destroy buff, file and return*/
-    xps_buffer_destroy(buff);
-    xps_file_destroy(file);
-    return;
+      xps_buffer_destroy(buff);
+      source->ready = false;  // stop being called, close handler will clean up
+      return;
   }
 
   if (xps_pipe_source_write(file->source, buff) != OK) {

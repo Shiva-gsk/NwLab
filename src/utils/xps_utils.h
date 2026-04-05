@@ -12,5 +12,6 @@ void vec_filter_null(vec_void_t *v);
 
 // Other functions
 const char *get_file_ext(const char *file_path);
+char *str_from_ptrs(const char *start, const char *end);
 
 #endif
