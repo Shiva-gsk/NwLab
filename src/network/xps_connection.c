@@ -295,12 +295,14 @@ void connection_source_handler(void *ptr) {
     if (xps_pipe_source_write(connection->source, buff) != OK) {
       logger(LOG_ERROR, "connection_source_handler()", "xps_pipe_source_write() failed");
       /*destroy buff*/
+      logger(LOG_DEBUG, "connection_source_handler()", "destroying buffer %p after failed write", (void*)buff);
       xps_buffer_destroy(buff);
       /*close connection*/
       connection_close(connection, false);
       return;
     }
 
+    logger(LOG_DEBUG, "connection_source_handler()", "destroying original buffer %p after successful write", (void*)buff);
     xps_buffer_destroy(buff);
 }
 
@@ -330,16 +332,28 @@ void connection_sink_handler(void *ptr) {
     }
 
     // Read from pipe into buffer
+    logger(LOG_DEBUG, "connection_sink_handler()", "reading %zu bytes from pipe buffer", available);
     xps_buffer_t *buff = xps_pipe_sink_read(sink, available);
     if (buff == NULL) {
         logger(LOG_ERROR, "connection_sink_handler()", "xps_pipe_sink_read() failed");
         return;
     }
+    logger(LOG_DEBUG, "connection_sink_handler()", "successfully read buffer %p from pipe, clearing pipe buffers", (void*)buff);
+
+    // Clear the buffers from the pipe after reading
+    if (xps_pipe_sink_clear(sink, available) != OK) {
+        logger(LOG_ERROR, "connection_sink_handler()", "xps_pipe_sink_clear() failed");
+        xps_buffer_destroy(buff);
+        return;
+    }
+    logger(LOG_DEBUG, "connection_sink_handler()", "cleared %zu bytes from pipe buffer list", available);
 
     // Write to socket
     int write_n = send(connection->sock_fd, buff->data, buff->len, MSG_NOSIGNAL);
+    logger(LOG_DEBUG, "connection_sink_handler()", "sent %d bytes to socket", write_n);
 
     /*destroy buff*/
+    logger(LOG_DEBUG, "connection_sink_handler()", "destroying read buffer %p", (void*)buff);
     xps_buffer_destroy(buff);
 
     // Socket would block

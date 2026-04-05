@@ -19,6 +19,7 @@ void upstream_error_res(xps_session_t *session);
 void session_process_request(xps_session_t *session);
 
 xps_session_t *xps_session_create(xps_core_t *core, xps_connection_t *client) {
+  logger(LOG_DEBUG, "xps_session_create()", "creating session for client %p", (void *)client);
   /* validate parameters */
     if (core == NULL) {
         logger(LOG_ERROR, "xps_session_create()", "invalid 'core' parameter");
@@ -76,6 +77,8 @@ xps_session_t *xps_session_create(xps_core_t *core, xps_connection_t *client) {
   session->upstream_sink->ready = true;
   session->file_sink->ready = true;
   session->http_req = NULL;
+
+  logger(LOG_DEBUG, "xps_session_create()", "initialized session %p", (void *)session);
 
   /*NOTE: We will be adding list of sessions as vec_void_t sessions to xps_core_s in xps_core module below*/
   // Add current session to core->sessions
@@ -152,6 +155,8 @@ void client_source_handler(void *ptr) {
   /* validate parameters */
   assert(ptr != NULL);
 
+  logger(LOG_DEBUG, "client_source_handler()", "handling client source event");
+
   xps_pipe_source_t *source = ptr;
   xps_session_t *session = source->ptr;
 
@@ -160,7 +165,8 @@ void client_source_handler(void *ptr) {
     logger(LOG_ERROR, "client_source_handler()", "xps_pipe_source_write() failed");
     return;
   }
-  xps_buffer_destroy(session->to_client_buff);
+  logger(LOG_DEBUG, "client_source_handler()", "wrote buffer %p to client pipe", (void *)session->to_client_buff);
+  // xps_buffer_destroy(session->to_client_buff);
 
   set_to_client_buff(session, NULL);
   session_check_destroy(session);
@@ -169,6 +175,8 @@ void client_source_handler(void *ptr) {
 void client_source_close_handler(void *ptr) {
   assert(ptr != NULL);
 
+  logger(LOG_DEBUG, "client_source_close_handler()", "closing client source");
+
   xps_pipe_source_t *source = ptr;
   xps_session_t *session = source->ptr;
 
@@ -176,6 +184,8 @@ void client_source_close_handler(void *ptr) {
 }
 void client_sink_handler(void *ptr) {
   assert(ptr != NULL);
+
+  logger(LOG_DEBUG, "client_sink_handler()", "handling client sink event");
 
   xps_pipe_sink_t *sink = ptr;
   xps_session_t *session = sink->ptr;
@@ -195,6 +205,13 @@ void client_sink_handler(void *ptr) {
   if (session->http_req == NULL) {
     int error;
     xps_http_req_t *http_req = xps_http_req_create(session->core, buff, &error);
+    if(error != OK) {
+      error = HTTP_BAD_REQUEST;
+      // xps_buffer_destroy(buff);
+      logger(LOG_ERROR, "client_sink_handler()", "xps_http_req_create() failed with error code %d", error);
+      session_process_request(session);
+      return;
+    }
     xps_buffer_destroy(buff);
 
     if (error == E_FAIL) {
@@ -210,9 +227,11 @@ void client_sink_handler(void *ptr) {
 
     // error == OK
     session->http_req = http_req;
+    logger(LOG_DEBUG, "client_sink_handler()", "parsed http request %p", (void *)http_req);
     xps_buffer_t *http_req_buff = xps_http_req_serialize(http_req);
     set_from_client_buff(session, http_req_buff);
     xps_pipe_sink_clear(sink, available);
+    // xps_buffer_destroy(buff);
     session_process_request(session);
 
   } else {
@@ -226,6 +245,8 @@ void client_sink_close_handler(void *ptr) {
 
   assert(ptr != NULL);
 
+  logger(LOG_DEBUG, "client_sink_close_handler()", "closing client sink");
+
   xps_pipe_sink_t *sink = ptr;
   xps_session_t *session = sink->ptr;
 
@@ -236,6 +257,7 @@ void client_sink_close_handler(void *ptr) {
 void upstream_source_handler(void *ptr) {
   /*assert*/
   assert(ptr != NULL);
+  logger(LOG_DEBUG, "upstream_source_handler()", "handling upstream source event");
   
   /*set ptr as source*/
   xps_pipe_source_t *source = ptr;
@@ -246,6 +268,8 @@ void upstream_source_handler(void *ptr) {
     logger(LOG_ERROR, "upstream_source_handler()", "xps_pipe_source_write() failed");
     return;
   }
+
+  logger(LOG_DEBUG, "upstream_source_handler()", "wrote buffer %p upstream", (void *)session->from_client_buff);
 
   // Checking if upstream is connected
   if (session->upstream_connected == false) {
@@ -263,6 +287,7 @@ void upstream_source_handler(void *ptr) {
 void upstream_source_close_handler(void *ptr) {
   /* fill this */
     assert(ptr != NULL);
+  logger(LOG_DEBUG, "upstream_source_close_handler()", "closing upstream source");
 
   xps_pipe_source_t *source = ptr;
   xps_session_t *session = source->ptr;
@@ -278,6 +303,7 @@ void upstream_source_close_handler(void *ptr) {
 void upstream_sink_handler(void *ptr) {
   /* fill this */
   assert(ptr != NULL);
+  logger(LOG_DEBUG, "upstream_sink_handler()", "handling upstream sink event");
 
   xps_pipe_sink_t *sink = ptr;
   xps_session_t *session = sink->ptr;
@@ -296,6 +322,8 @@ void upstream_sink_handler(void *ptr) {
     return;
   }
 
+  logger(LOG_DEBUG, "upstream_sink_handler()", "read buffer %p from upstream pipe", (void *)buff);
+
   set_to_client_buff(session, buff);
   xps_pipe_sink_clear(sink, available);
 }
@@ -303,6 +331,7 @@ void upstream_sink_handler(void *ptr) {
 void upstream_sink_close_handler(void *ptr) {
   /* fill this */
   assert(ptr != NULL);
+  logger(LOG_DEBUG, "upstream_sink_close_handler()", "closing upstream sink");
 
   xps_pipe_sink_t *sink = ptr;
   xps_session_t *session = sink->ptr;
@@ -318,12 +347,15 @@ void upstream_sink_close_handler(void *ptr) {
 void upstream_error_res(xps_session_t *session) {
   assert(session != NULL);
 
+  logger(LOG_DEBUG, "upstream_error_res()", "marking upstream error response for session %p", (void *)session);
+
   session->upstream_error_res_set = true;
 }
 
 void file_sink_handler(void *ptr) {
   /* fill this */
   assert(ptr != NULL);
+  logger(LOG_DEBUG, "file_sink_handler()", "handling file sink event");
 
   xps_pipe_sink_t *sink = ptr;
   xps_session_t *session = sink->ptr;
@@ -340,6 +372,8 @@ void file_sink_handler(void *ptr) {
     return;
   }
 
+  logger(LOG_DEBUG, "file_sink_handler()", "read buffer %p from file pipe", (void *)buff);
+
   set_to_client_buff(session, buff);
   xps_pipe_sink_clear(sink, available);
 }
@@ -349,6 +383,8 @@ void file_sink_close_handler(void *ptr) {
   /* fill this */
   assert(ptr != NULL);
 
+  logger(LOG_DEBUG, "file_sink_close_handler()", "closing file sink");
+
   xps_pipe_sink_t *sink = ptr;
   xps_session_t *session = sink->ptr;
 
@@ -357,6 +393,8 @@ void file_sink_close_handler(void *ptr) {
 void set_to_client_buff(xps_session_t *session, xps_buffer_t *buff) {
   /* validate parameters */
   assert(session != NULL);
+
+  logger(LOG_DEBUG, "set_to_client_buff()", "session=%p buff=%p", (void *)session, (void *)buff);
 
   session->to_client_buff = buff;
 
@@ -375,6 +413,8 @@ void set_from_client_buff(xps_session_t *session, xps_buffer_t *buff) {
   /* validate parameters */
   assert(session != NULL);
 
+  logger(LOG_DEBUG, "set_from_client_buff()", "session=%p buff=%p", (void *)session, (void *)buff);
+
   session->from_client_buff = buff;
 
   if (buff == NULL) {
@@ -390,6 +430,8 @@ void session_check_destroy(xps_session_t *session) {
   /* validate parameters */
     assert(session != NULL);
 
+  logger(LOG_DEBUG, "session_check_destroy()", "checking session %p for destruction", (void *)session);
+
   bool c2u_flow =
     session->upstream_source->active && (session->client_sink->active || session->from_client_buff);
 
@@ -398,6 +440,8 @@ void session_check_destroy(xps_session_t *session) {
   bool f2c_flow = session->client_source->active && (session->file_sink->active || session->to_client_buff);
 
   bool flowing = c2u_flow || u2c_flow || f2c_flow;
+
+  logger(LOG_DEBUG, "session_check_destroy()", "flow state c2u=%d u2c=%d f2c=%d", c2u_flow, u2c_flow, f2c_flow);
 
   if (!flowing)
     xps_session_destroy(session);
@@ -412,62 +456,50 @@ void session_process_request(xps_session_t *session) {
   }
 
   if (session->http_req == NULL || session->http_req->path == NULL) {
-    sprintf(reply, "HTTP/1.1 400 Bad Request\n\n");
-    xps_buffer_t *buff = xps_buffer_create(strlen(reply)+1, strlen(reply)+1, reply);
+    sprintf(reply, "HTTP/1.1 400 Bad Request\r\nServer: eXpServer\r\n\r\n");
+    xps_buffer_t *buff = xps_buffer_create(strlen(reply)+1, strlen(reply)+1, strdup(reply));
     set_to_client_buff(session, buff);
     free(reply);
     return;
   }
 
-  if (session->http_req->path) {
-    char file_path[DEFAULT_BUFFER_SIZE];
-    strcpy(file_path, "../public");
-    strcat(file_path, session->http_req->path);
+  char file_path[DEFAULT_BUFFER_SIZE];
+  strcpy(file_path, "../public");
+  strcat(file_path, session->http_req->path);
 
-    int error;
-    session->file = xps_file_create(session->core, file_path, &error);
-    if (session->file == NULL) {
-      logger(LOG_ERROR, "session_process_request()", "xps_file_create() failed");
-      perror("Error message");
-    }
+  int error;
+  session->file = xps_file_create(session->core, file_path, &error);
 
-    if (error == E_PERMISSION) {
-      sprintf(reply, "HTTP/1.1 403 Forbidden\n\n");
-      xps_buffer_t *buff = xps_buffer_create(strlen(reply)+1, strlen(reply)+1, reply);
-      set_to_client_buff(session, buff);
+  if (error == E_PERMISSION) {
+    sprintf(reply, "HTTP/1.1 403 Forbidden\r\nServer: eXpServer\r\n\r\n");
+    xps_buffer_t *buff = xps_buffer_create(strlen(reply)+1, strlen(reply)+1, strdup(reply));
+    set_to_client_buff(session, buff);
 
-    } else if (error == E_NOTFOUND) {
-      sprintf(reply, "HTTP/1.1 404 Not Found\n\n");
-      xps_buffer_t *buff = xps_buffer_create(strlen(reply)+1, strlen(reply)+1, reply);
-      set_to_client_buff(session, buff);
+  } else if (error == E_NOTFOUND) {
+    sprintf(reply, "HTTP/1.1 404 Not Found\r\nServer: eXpServer\r\n\r\n");
+    xps_buffer_t *buff = xps_buffer_create(strlen(reply)+1, strlen(reply)+1, strdup(reply));
+    set_to_client_buff(session, buff);
 
-    } else if (error != OK) {
-      sprintf(reply, "HTTP/1.1 500 Internal Server Error\n\n");
-      xps_buffer_t *buff = xps_buffer_create(strlen(reply)+1, strlen(reply)+1, reply);
-      set_to_client_buff(session, buff);
+  } else if (error != OK) {
+    sprintf(reply, "HTTP/1.1 500 Internal Server Error\r\nServer: eXpServer\r\n\r\n");
+    xps_buffer_t *buff = xps_buffer_create(strlen(reply)+1, strlen(reply)+1, strdup(reply));
+    set_to_client_buff(session, buff);
 
+  } else {
+    if (session->file->mime_type) {
+      sprintf(reply, "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nServer: eXpServer\r\n\r\n",
+              session->file->mime_type);
     } else {
-      if (session->file->mime_type) {
-        sprintf(reply,
-                "HTTP/1.1 200 OK\nServer: eXpServer\nAccess-Control-Allow-Origin: "
-                "*\nContent-Length: %zu\nContent-Type: %s\n\n",
-                session->file->size, session->file->mime_type);
-      } else {
-        sprintf(reply,
-                "HTTP/1.1 200 OK\nServer: eXpServer\nAccess-Control-Allow-Origin: "
-                "*\nContent-Length: %zu\n\n",
-                session->file->size);
-      }
+      sprintf(reply, "HTTP/1.1 200 OK\r\nServer: eXpServer\r\n\r\n");
+    }
+    xps_buffer_t *buff = xps_buffer_create(strlen(reply)+1, strlen(reply)+1, strdup(reply));
+    set_to_client_buff(session, buff);
 
-      xps_buffer_t *buff = xps_buffer_create(strlen(reply)+1, strlen(reply)+1, reply);
-      set_to_client_buff(session, buff);
-
-      if (xps_pipe_create(session->core, DEFAULT_PIPE_BUFF_THRESH, session->file->source, session->file_sink) == NULL) {
-        logger(LOG_ERROR, "session_process_request()", "failed to create file pipe");
-        free(reply);
-        xps_session_destroy(session);
-        return;
-      }
+    if (xps_pipe_create(session->core, DEFAULT_PIPE_BUFF_THRESH, session->file->source, session->file_sink) == NULL) {
+      logger(LOG_ERROR, "session_process_request()", "failed to create file pipe");
+      free(reply);
+      xps_session_destroy(session);
+      return;
     }
   }
 
@@ -477,6 +509,8 @@ void session_process_request(xps_session_t *session) {
 void xps_session_destroy(xps_session_t *session) {
   /* validate parameters */
   assert(session != NULL);
+
+  logger(LOG_DEBUG, "xps_session_destroy()", "destroying session %p", (void *)session);
 
   /* destroy client_source, client_sink, upstream_source, upstream_sink and file_sink attached to session */
   if (session->client_source != NULL)

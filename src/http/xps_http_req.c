@@ -14,12 +14,16 @@ int http_process_request_line(xps_http_req_t *http_req, xps_buffer_t *buff) {
   printf("URI: %s\n", http_req->uri);
   if (http_req->schema_start != NULL && http_req->schema_end != NULL) {
       http_req->schema = str_from_ptrs(http_req->schema_start, http_req->schema_end);
+      printf("SCHEMA: %s\n", http_req->schema);
     }
-    printf("SCHEMA: %s\n", http_req->schema);
+    else
+      printf("SCHEMA: (null)");
   if (http_req->host_start != NULL && http_req->host_end != NULL) {
       http_req->host = str_from_ptrs(http_req->host_start, http_req->host_end);
+      printf("HOST: %s\n", http_req->host);
     }
-    printf("HOST: %s\n", http_req->host);
+    else
+      printf("HOST: (null)");
     http_req->port = -1;
   if (http_req->port_start != NULL && http_req->port_end != NULL) {
       char *port_str = str_from_ptrs(http_req->port_start, http_req->port_end);
@@ -66,12 +70,26 @@ int http_process_headers(xps_http_req_t *http_req, xps_buffer_t *buff) {
   int error;
   while (1) {
     error = xps_http_parse_header_line(http_req, buff);
-    if (error == E_FAIL || error == E_AGAIN)
+    if (error == E_FAIL) {
+      return E_FAIL;   // propagate error
+    }
+
+    if (error == E_AGAIN) {
       break;
+    }
     if (error == OK || error == E_NEXT) {
       /* Alloc memory for new header*/
       xps_keyval_t *header = malloc(sizeof(*header));
       if (header == NULL) {
+        logger(LOG_DEBUG, "http_process_headers()", "malloc failed for header, freeing headers list");
+        /* cleanup on error */
+        for (int i = 0; i < http_req->headers.length; i++) {
+          xps_keyval_t *h = (xps_keyval_t*)http_req->headers.data[i];
+          free(h->key);
+          free(h->val);
+          free(h);
+        }
+        vec_deinit(&http_req->headers);
         return E_FAIL;
       }
       /*assign key,val from their corresponding start and end pointers*/
@@ -83,25 +101,18 @@ int http_process_headers(xps_http_req_t *http_req, xps_buffer_t *buff) {
       if (error == E_NEXT)
          continue;
     }
-    printf("HEADERS\n");
-      for (int i = 0; i < http_req->headers.length; i++) {
-        xps_keyval_t *header = http_req->headers.data[i];
-        printf("%s: %s\n", header->key, header->val);
-      }
-		return OK;
-    }
-    /*error occurs, thus iterate through header list, free each header*/
-    for (int i = 0; i < http_req->headers.length; i++) {
-      xps_keyval_t *header = (xps_keyval_t*)http_req->headers.data[i];
-      free(header->key);
-      free(header->val);
-      free(header);
-    }
-    /*deinitialize headers list*/\
-    vec_deinit(&http_req->headers);
-    return error;
+    /* If we reach here with error != E_NEXT, we're done parsing headers */
+    break;
   }
-
+	
+  printf("HEADERS\n");
+  for (int i = 0; i < http_req->headers.length; i++) {
+    xps_keyval_t *header = http_req->headers.data[i];
+    printf("%s: %s\n", header->key, header->val);
+  }
+	
+  return OK;
+}
 
   xps_buffer_t *xps_http_req_serialize(xps_http_req_t *http_req) {
     assert(http_req != NULL);
@@ -109,7 +120,7 @@ int http_process_headers(xps_http_req_t *http_req, xps_buffer_t *buff) {
     xps_buffer_t *headers_str = xps_http_serialize_headers(&http_req->headers);
     size_t final_len = strlen(http_req->request_line) + 1 + headers_str->len + 1;   /*Calculate length for final buffer*/
     /*Create instance for final buffer*/
-    xps_buffer_t *buff = xps_buffer_create(final_len, final_len, NULL);
+    xps_buffer_t *buff = xps_buffer_create(final_len+1, final_len, NULL);
     buff->pos = buff->data;
     /*Copy everything to final buffer*/
     memcpy(buff->pos, http_req->request_line, strlen(http_req->request_line));
@@ -133,7 +144,7 @@ xps_http_req_t *xps_http_req_create(xps_core_t *core, xps_buffer_t *buff, int *e
 	/*assert*/
   assert(core != NULL);
   assert(buff != NULL);
-  assert(error != NULL);
+  // assert(error != NULL);
   *error = E_FAIL;
 	/* Alloc memory for http_req instance*/
   xps_http_req_t *http_req = malloc(sizeof(*http_req));
@@ -148,12 +159,14 @@ xps_http_req_t *xps_http_req_create(xps_core_t *core, xps_buffer_t *buff, int *e
   if (error_code != OK) {
     logger(LOG_ERROR, "xps_http_req_create()", "failed to process request line");
     free(http_req);
+    *error = HTTP_BAD_REQUEST;   // ← add this line
     return NULL;
   }
   logger(LOG_INFO, "xps_http_req_create()", "processed request line successfully");
   /*Process headers and handle possible errors*/
   error_code = http_process_headers(http_req, buff);
   if (error_code != OK) {
+    *error = HTTP_BAD_REQUEST;
     free(http_req);
     return NULL;
   }
@@ -165,6 +178,16 @@ xps_http_req_t *xps_http_req_create(xps_core_t *core, xps_buffer_t *buff, int *e
   const char *body_len_str = xps_http_get_header(&http_req->headers, "Content-Length");
   if (body_len_str != NULL) {
     http_req->body_len = atoi(body_len_str);
+  }
+
+  /* Host header is mandatory in HTTP/1.1 */
+  const char *host_header = xps_http_get_header(&http_req->headers, "Host");
+  if (host_header == NULL)
+    host_header = xps_http_get_header(&http_req->headers, "host");
+  if (http_req->http_version != NULL && strcmp(http_req->http_version, "1.1") == 0 && host_header == NULL) {
+    xps_http_req_destroy(core, http_req);
+    *error = HTTP_BAD_REQUEST;
+    return NULL;
   }
   /*assign body_len*/
 	*error = OK;

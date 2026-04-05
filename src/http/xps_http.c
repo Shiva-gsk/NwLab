@@ -52,6 +52,8 @@ int xps_http_parse_request_line(xps_http_req_t *http_req, xps_buffer_t *buff) {
             http_req->method_n = HTTP_OPTIONS;
           else if (method_len == 5 && http_strcmp(http_req->method_start, "TRACE", 5))
             http_req->method_n = HTTP_TRACE;
+          else
+            return E_FAIL;
           /*assign method_end*/
           http_req->method_end = p_ch;
           /*next state is RL_SP_AFTER_METHOD*/
@@ -184,7 +186,7 @@ int xps_http_parse_request_line(xps_http_req_t *http_req, xps_buffer_t *buff) {
           http_req->uri_end = p_ch;
           parser_state = RL_VERSION_START;
         }
-        else if(ch == '?' || ch == '&' || ch == '='){
+        else if(ch == '?' || ch == '&' || ch == '=' || ch == '#'){
           http_req->pathname_end = p_ch;
           parser_state = RL_PATHNAME;
         }
@@ -319,7 +321,7 @@ int xps_http_parse_request_line(xps_http_req_t *http_req, xps_buffer_t *buff) {
         return E_FAIL;
     }
   }
-
+  http_req->parser_state = parser_state;
   return E_AGAIN;
 }
 
@@ -405,6 +407,7 @@ int xps_http_parse_header_line(xps_http_req_t *http_req, xps_buffer_t *buff) {
         } else {
           parser_state = H_START;
           buff->pos = p_ch;
+          http_req->parser_state = parser_state;
           return E_NEXT; // This header is done, repeat for the next
         }
         break;
@@ -428,7 +431,7 @@ int xps_http_parse_header_line(xps_http_req_t *http_req, xps_buffer_t *buff) {
         return E_FAIL;
     }
   }
-
+  http_req->parser_state = parser_state;
   return E_AGAIN;
 }
 
@@ -439,7 +442,7 @@ const char *xps_http_get_header(vec_void_t *headers, const char *key) {
 
   for (int i = 0; i < headers->length; i++) {
     xps_keyval_t *header = (headers->data[i]);
-    if (strcmp(header->key, key) == 0)
+    if (strcasecmp(header->key, key) == 0)
       return header->val;
   }
 	return NULL;
@@ -454,7 +457,7 @@ xps_buffer_t *xps_http_serialize_headers(vec_void_t *headers) {
   if (buff == NULL) {
     return NULL;
   }
-  buff->size = 1024; //initial size
+  buff->size = DEFAULT_BUFFER_SIZE; //initial size
   buff->len = 0;
   buff->data = malloc(buff->size);
   buff->pos = buff->data;
@@ -468,7 +471,7 @@ xps_buffer_t *xps_http_serialize_headers(vec_void_t *headers) {
     /*get required length to store a header*/
     size_t header_str_len = strlen(header->key) + strlen(header->val) + 5; // for :, space, newline and null terminator
     char header_str[header_str_len];
-    sprintf(header_str, "%s: %s\n", header->key, header->val);
+    sprintf(header_str, "%s: %s\r\n", header->key, header->val);
     if ((buff->size - buff->len) < header_str_len) { //buffer is small
       u_char *new_data = realloc(buff->data, buff->size * 2);
       /*handle error*/

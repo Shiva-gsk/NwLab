@@ -44,6 +44,7 @@ xps_pipe_t *xps_pipe_create(xps_core_t *core, size_t buff_thresh, xps_pipe_sourc
 
 void xps_pipe_destroy(xps_pipe_t *pipe) {
     assert(pipe != NULL);
+    logger(LOG_DEBUG, "xps_pipe_destroy()", "destroying pipe %p", (void*)pipe);
 
     /*Set NULL in 'pipes' list of core and increment n_null_pipes*/
     for (int i = 0; i < pipe->core->pipes.length; i++) {
@@ -51,13 +52,16 @@ void xps_pipe_destroy(xps_pipe_t *pipe) {
         if (curr == pipe) {
             pipe->core->pipes.data[i] = NULL;
             pipe->core->n_null_pipes++;
+            logger(LOG_DEBUG, "xps_pipe_destroy()", "marked pipe as NULL in list at index %d", i);
             break;
         }
     }   
 
     /*Destroy the buff_list of pipe*/
+    logger(LOG_DEBUG, "xps_pipe_destroy()", "destroying buffer list for pipe %p", (void*)pipe);
     xps_buffer_list_destroy(pipe->buff_list);
     /*Free the pipe*/
+    logger(LOG_DEBUG, "xps_pipe_destroy()", "freeing pipe %p", (void*)pipe);
     free(pipe);
     logger(LOG_DEBUG, "xps_pipe_destroy()", "destroyed pipe");
 }
