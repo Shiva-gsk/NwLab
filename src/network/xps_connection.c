@@ -340,13 +340,6 @@ void connection_sink_handler(void *ptr) {
     }
     logger(LOG_DEBUG, "connection_sink_handler()", "successfully read buffer %p from pipe, clearing pipe buffers", (void*)buff);
 
-    // Clear the buffers from the pipe after reading
-    if (xps_pipe_sink_clear(sink, available) != OK) {
-        logger(LOG_ERROR, "connection_sink_handler()", "xps_pipe_sink_clear() failed");
-        xps_buffer_destroy(buff);
-        return;
-    }
-    logger(LOG_DEBUG, "connection_sink_handler()", "cleared %zu bytes from pipe buffer list", available);
 
     // Write to socket
     int write_n = send(connection->sock_fd, buff->data, buff->len, MSG_NOSIGNAL);
@@ -374,6 +367,8 @@ void connection_sink_handler(void *ptr) {
     if (write_n == 0)
       return;
 
+    if (xps_pipe_sink_clear(connection->sink, write_n) != OK)
+      logger(LOG_ERROR, "connection_sink_handler()", "failed to clear %d bytes from sink", write_n);
 }
 
 void connection_sink_close_handler(void *ptr) {

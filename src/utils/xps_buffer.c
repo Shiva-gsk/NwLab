@@ -147,6 +147,7 @@ xps_buffer_t *xps_buffer_list_read(xps_buffer_list_t *buff_list, size_t len) {
 }
 
 int xps_buffer_list_clear(xps_buffer_list_t *buff_list, size_t len) {
+  logger(LOG_DEBUG, "xps_buffer_list_clear()", "clearing %zu bytes from buffer list %p with total length %zu", len, (void*)buff_list, buff_list->len);
   assert(buff_list != NULL);
 
   if (len == 0)

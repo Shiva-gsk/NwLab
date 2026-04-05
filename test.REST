@@ -1,0 +1,48 @@
+### 🧪 eXpServer Invalid Request Tests
+
+@baseUrl = http://localhost:8001
+
+### Test 5: Missing HTTP Version
+
+# Expect: HTTP/1.1 400 Bad Request
+
+GET {{baseUrl}}/sample.txt
+Host: localhost:8001
+
+###
+
+### Test 6: Invalid HTTP Method
+
+# Expect: HTTP/1.1 400 Bad Request
+
+FAKE {{baseUrl}}/sample.txt HTTP/1.1
+Host: localhost:8001
+
+###
+
+### Test 7: Missing Host Header
+
+# Expect: HTTP/1.1 400 Bad Request
+
+GET {{baseUrl}}/sample.txt HTTP/1.1
+
+###
+
+### Test 8: Invalid HTTP Version
+
+# Expect: HTTP/1.1 400 Bad Request
+
+GET {{baseUrl}}/sample.txt HTTP/9.9
+Host: localhost:8001
+
+###
+
+### Test 9: Improperly formatted headers
+
+# Expect: HTTP/1.1 400 Bad Request
+
+GET {{baseUrl}}/sample.txt HTTP/1.1
+Host localhost:8001
+Connection keep-alive
+
+###

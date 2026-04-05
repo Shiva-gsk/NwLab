@@ -93,5 +93,7 @@ int xps_http_parse_header_line(xps_http_req_t *http_req, xps_buffer_t *buffer);
 
 const char *xps_http_get_header(vec_void_t *headers, const char *key);
 xps_buffer_t *xps_http_serialize_headers(vec_void_t *headers);
+const char *xps_http_status_text(u_int code);
+int xps_http_set_header(vec_void_t *headers, const char *key, const char *val);
 
 #endif
