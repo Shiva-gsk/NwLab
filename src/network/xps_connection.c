@@ -374,8 +374,6 @@ void connection_sink_handler(void *ptr) {
     if (write_n == 0)
       return;
 
-    if (xps_pipe_sink_clear(connection->sink, write_n) != OK)
-      logger(LOG_ERROR, "connection_sink_handler()", "failed to clear %d bytes from sink", write_n);
 }
 
 void connection_sink_close_handler(void *ptr) {
