@@ -59,6 +59,12 @@ struct xps_keyval_s;
 struct xps_session_s;
 struct xps_http_req_s;
 struct xps_http_res_s;
+struct xps_config_s;
+struct xps_config_server_s;
+struct xps_config_listener_s;
+struct xps_config_route_s;
+struct xps_config_lookup_s;
+struct xps_cliargs_s;
 
 
 // Struct typedefs
@@ -76,7 +82,12 @@ typedef struct xps_keyval_s xps_keyval_t;
 typedef struct xps_session_s xps_session_t;
 typedef struct xps_http_req_s xps_http_req_t;
 typedef struct xps_http_res_s xps_http_res_t;
-
+typedef struct xps_config_s xps_config_t;
+typedef struct xps_config_server_s xps_config_server_t;
+typedef struct xps_config_listener_s xps_config_listener_t;
+typedef struct xps_config_route_s xps_config_route_t;
+typedef struct xps_config_lookup_s xps_config_lookup_t;
+typedef struct xps_cliargs_s xps_cliargs_t;
 
 // Function typedefs
 typedef void (*xps_handler_t)(void *ptr);
@@ -106,5 +117,8 @@ typedef void (*xps_handler_t)(void *ptr);
 #include "http/xps_http.h"
 #include "http/xps_http_req.h"
 #include "http/xps_http_res.h"
+#include "lib/parson/parson.h"
+#include "config/xps_config.h"
+#include "utils/xps_cliargs.h"
 
 #endif

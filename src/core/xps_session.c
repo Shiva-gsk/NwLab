@@ -452,86 +452,226 @@ void session_check_destroy(xps_session_t *session) {
 }
 
 void session_process_request(xps_session_t *session) {
-  assert(session != NULL);
+    assert(session != NULL);
 
-  xps_http_res_t *http_res = NULL;
-
-  if (session->http_req == NULL || session->http_req->path == NULL) {
-    http_res = xps_http_res_create(session->core, HTTP_BAD_REQUEST);
-    if (http_res == NULL) {
-      logger(LOG_ERROR, "session_process_request()", "xps_http_res_create() failed");
-      return;
-    }
-    xps_buffer_t *buff = xps_http_res_serialize(http_res);
-    set_to_client_buff(session, buff);
-    xps_http_res_destroy(http_res);
-    return;
-  }
-
-  char file_path[DEFAULT_BUFFER_SIZE];
-  strcpy(file_path, "../public");
-  strcat(file_path, session->http_req->path);
-
-  int error;
-  session->file = xps_file_create(session->core, file_path, &error);
-
-  if (error == E_PERMISSION) {
-    http_res = xps_http_res_create(session->core, HTTP_FORBIDDEN);
-    if (http_res == NULL) {
-      logger(LOG_ERROR, "session_process_request()", "xps_http_res_create() failed");
-      return;
-    }
-    xps_buffer_t *buff = xps_http_res_serialize(http_res);
-    set_to_client_buff(session, buff);
-    xps_http_res_destroy(http_res);
-
-  } else if (error == E_NOTFOUND) {
-    http_res = xps_http_res_create(session->core, HTTP_NOT_FOUND);
-    if (http_res == NULL) {
-      logger(LOG_ERROR, "session_process_request()", "xps_http_res_create() failed");
-      return;
-    }
-    xps_buffer_t *buff = xps_http_res_serialize(http_res);
-    set_to_client_buff(session, buff);
-    xps_http_res_destroy(http_res);
-
-  } else if (error != OK) {
-    http_res = xps_http_res_create(session->core, HTTP_INTERNAL_SERVER_ERROR);
-    if (http_res == NULL) {
-      logger(LOG_ERROR, "session_process_request()", "xps_http_res_create() failed");
-      return;
-    }
-    xps_buffer_t *buff = xps_http_res_serialize(http_res);
-    set_to_client_buff(session, buff);
-    xps_http_res_destroy(http_res);
-
-  } else {
-    http_res = xps_http_res_create(session->core, HTTP_OK);
-    if (http_res == NULL) {
-      logger(LOG_ERROR, "session_process_request()", "xps_http_res_create() failed");
-      return;
+    // ── Guard: no valid request → 400 ───────────────────────────────────
+    if (session->http_req == NULL || session->http_req->path == NULL) {
+        xps_http_res_t *http_res = xps_http_res_create(session->core, HTTP_BAD_REQUEST);
+        if (http_res == NULL) return;
+        xps_http_set_header(&http_res->headers, "Server", SERVER_NAME);
+        xps_buffer_t *buff = xps_http_res_serialize(http_res);
+        set_to_client_buff(session, buff);
+        xps_http_res_destroy(http_res);
+        return;
     }
 
-    if (session->file->mime_type) {
-      xps_http_set_header(&http_res->headers, "Content-Type", session->file->mime_type);
+    // ── Config lookup ────────────────────────────────────────────────────
+    int error;
+    xps_config_lookup_t *lookup = xps_config_lookup(
+        session->core->config, session->http_req, session->client, &error
+    );
+
+    if (lookup == NULL) {
+        int status = (error == E_NOTFOUND) ? HTTP_NOT_FOUND : HTTP_INTERNAL_SERVER_ERROR;
+        xps_http_res_t *http_res = xps_http_res_create(session->core, status);
+        if (http_res == NULL) return;
+        xps_http_set_header(&http_res->headers, "Server", SERVER_NAME);
+        xps_buffer_t *buff = xps_http_res_serialize(http_res);
+        set_to_client_buff(session, buff);
+        xps_http_res_destroy(http_res);
+        return;
     }
 
-    char len_str[32];
-    sprintf(len_str, "%zu", session->file->size);
+    session->lookup = lookup;
 
-    // xps_http_set_header(&http_res->headers, "Content-Length", len_str);
+    // ── File serve ───────────────────────────────────────────────────────
+    if (lookup->type == REQ_FILE_SERVE) {
+        if (lookup->file_path == NULL) {
+            xps_http_res_t *http_res = xps_http_res_create(session->core, HTTP_NOT_FOUND);
+            if (http_res == NULL) return;
+            xps_http_set_header(&http_res->headers, "Server", SERVER_NAME);
+            xps_buffer_t *buff = xps_http_res_serialize(http_res);
+            set_to_client_buff(session, buff);
+            xps_http_res_destroy(http_res);
+            return;
+        }
+        
+        int file_error;
+        session->file = xps_file_create(session->core, lookup->file_path, &file_error);
 
-    xps_buffer_t *buff = xps_http_res_serialize(http_res);
-    set_to_client_buff(session, buff);
-    xps_http_res_destroy(http_res);
+        if (file_error == E_PERMISSION) {
+            xps_http_res_t *http_res = xps_http_res_create(session->core, HTTP_FORBIDDEN);
+            if (http_res == NULL) return;
+            xps_http_set_header(&http_res->headers, "Server", SERVER_NAME);
+            xps_buffer_t *buff = xps_http_res_serialize(http_res);
+            set_to_client_buff(session, buff);
+            xps_http_res_destroy(http_res);
 
-    if (xps_pipe_create(session->core, DEFAULT_PIPE_BUFF_THRESH, session->file->source, session->file_sink) == NULL) {
-      logger(LOG_ERROR, "session_process_request()", "failed to create file pipe");
-      xps_session_destroy(session);
-      return;
+        } else if (file_error == E_NOTFOUND) {
+            xps_http_res_t *http_res = xps_http_res_create(session->core, HTTP_NOT_FOUND);
+            if (http_res == NULL) return;
+            xps_http_set_header(&http_res->headers, "Server", SERVER_NAME);
+            xps_buffer_t *buff = xps_http_res_serialize(http_res);
+            set_to_client_buff(session, buff);
+            xps_http_res_destroy(http_res);
+
+        } else if (file_error != OK) {
+            xps_http_res_t *http_res = xps_http_res_create(session->core, HTTP_INTERNAL_SERVER_ERROR);
+            if (http_res == NULL) return;
+            xps_http_set_header(&http_res->headers, "Server", SERVER_NAME);
+            xps_buffer_t *buff = xps_http_res_serialize(http_res);
+            set_to_client_buff(session, buff);
+            xps_http_res_destroy(http_res);
+
+        } else {
+            xps_http_res_t *http_res = xps_http_res_create(session->core, HTTP_OK);
+            if (http_res == NULL) return;
+            xps_http_set_header(&http_res->headers, "Server", SERVER_NAME);
+            if (session->file->mime_type)
+                xps_http_set_header(&http_res->headers, "Content-Type", session->file->mime_type);
+            xps_buffer_t *buff = xps_http_res_serialize(http_res);
+            set_to_client_buff(session, buff);
+            xps_http_res_destroy(http_res);
+
+            if (xps_pipe_create(session->core, DEFAULT_PIPE_BUFF_THRESH,
+                                session->file->source, session->file_sink) == NULL) {
+                logger(LOG_ERROR, "session_process_request()", "failed to create file pipe");
+                xps_session_destroy(session);
+            }
+        }
+
+    // ── Reverse proxy ────────────────────────────────────────────────────
+    } else if (lookup->type == REQ_REVERSE_PROXY) {
+        char host[256];
+        u_int port;
+        sscanf(lookup->upstream, "%255[^:]:%u", host, &port);
+
+        xps_connection_t *upstream = xps_upstream_create(session->core, host, port);
+        if (upstream == NULL) {
+            logger(LOG_ERROR, "session_process_request()", "xps_upstream_create() failed");
+            xps_http_res_t *http_res = xps_http_res_create(session->core, HTTP_INTERNAL_SERVER_ERROR);
+            if (http_res == NULL) return;
+            xps_http_set_header(&http_res->headers, "Server", SERVER_NAME);
+            xps_buffer_t *buff = xps_http_res_serialize(http_res);
+            set_to_client_buff(session, buff);
+            xps_http_res_destroy(http_res);
+            return;
+        }
+
+        session->upstream = upstream;
+
+        if (xps_pipe_create(session->core, DEFAULT_PIPE_BUFF_THRESH,
+                            session->upstream_source, upstream->sink) == NULL ||
+            xps_pipe_create(session->core, DEFAULT_PIPE_BUFF_THRESH,
+                            upstream->source, session->upstream_sink) == NULL) {
+            logger(LOG_ERROR, "session_process_request()", "failed to create upstream pipes");
+            xps_session_destroy(session);
+        }
+
+    // ── Redirect ─────────────────────────────────────────────────────────
+    } else if (lookup->type == REQ_REDIRECT) {
+        xps_http_res_t *http_res = xps_http_res_create(session->core, lookup->http_status_code);
+        if (http_res == NULL) return;
+        xps_http_set_header(&http_res->headers, "Server", SERVER_NAME);
+        xps_http_set_header(&http_res->headers, "Location", lookup->redirect_url);
+        xps_buffer_t *buff = xps_http_res_serialize(http_res);
+        set_to_client_buff(session, buff);
+        xps_http_res_destroy(http_res);
+
+    // ── Unknown type ──────────────────────────────────────────────────────
+    } else {
+        logger(LOG_ERROR, "session_process_request()", "invalid lookup type");
+        xps_http_res_t *http_res = xps_http_res_create(session->core, HTTP_INTERNAL_SERVER_ERROR);
+        if (http_res == NULL) return;
+        xps_http_set_header(&http_res->headers, "Server", SERVER_NAME);
+        xps_buffer_t *buff = xps_http_res_serialize(http_res);
+        set_to_client_buff(session, buff);
+        xps_http_res_destroy(http_res);
+        xps_session_destroy(session);
     }
-  }
 }
+//Removed in S16
+// void session_process_request(xps_session_t *session) {
+//   assert(session != NULL);
+
+//   xps_http_res_t *http_res = NULL;
+
+//   if (session->http_req == NULL || session->http_req->path == NULL) {
+//     http_res = xps_http_res_create(session->core, HTTP_BAD_REQUEST);
+//     if (http_res == NULL) {
+//       logger(LOG_ERROR, "session_process_request()", "xps_http_res_create() failed");
+//       return;
+//     }
+//     xps_buffer_t *buff = xps_http_res_serialize(http_res);
+//     set_to_client_buff(session, buff);
+//     xps_http_res_destroy(http_res);
+//     return;
+//   }
+
+//   char file_path[DEFAULT_BUFFER_SIZE];
+//   strcpy(file_path, "../public");
+//   strcat(file_path, session->http_req->path);
+
+//   int error;
+//   session->file = xps_file_create(session->core, file_path, &error);
+
+//   if (error == E_PERMISSION) {
+//     http_res = xps_http_res_create(session->core, HTTP_FORBIDDEN);
+//     if (http_res == NULL) {
+//       logger(LOG_ERROR, "session_process_request()", "xps_http_res_create() failed");
+//       return;
+//     }
+//     xps_buffer_t *buff = xps_http_res_serialize(http_res);
+//     set_to_client_buff(session, buff);
+//     xps_http_res_destroy(http_res);
+
+//   } else if (error == E_NOTFOUND) {
+//     http_res = xps_http_res_create(session->core, HTTP_NOT_FOUND);
+//     if (http_res == NULL) {
+//       logger(LOG_ERROR, "session_process_request()", "xps_http_res_create() failed");
+//       return;
+//     }
+//     xps_buffer_t *buff = xps_http_res_serialize(http_res);
+//     set_to_client_buff(session, buff);
+//     xps_http_res_destroy(http_res);
+
+//   } else if (error != OK) {
+//     http_res = xps_http_res_create(session->core, HTTP_INTERNAL_SERVER_ERROR);
+//     if (http_res == NULL) {
+//       logger(LOG_ERROR, "session_process_request()", "xps_http_res_create() failed");
+//       return;
+//     }
+//     xps_buffer_t *buff = xps_http_res_serialize(http_res);
+//     set_to_client_buff(session, buff);
+//     xps_http_res_destroy(http_res);
+
+//   } else {
+//     http_res = xps_http_res_create(session->core, HTTP_OK);
+//     if (http_res == NULL) {
+//       logger(LOG_ERROR, "session_process_request()", "xps_http_res_create() failed");
+//       return;
+//     }
+
+//     if (session->file->mime_type) {
+//       xps_http_set_header(&http_res->headers, "Content-Type", session->file->mime_type);
+//     }
+
+//     char len_str[32];
+//     sprintf(len_str, "%zu", session->file->size);
+
+//     // xps_http_set_header(&http_res->headers, "Content-Length", len_str);
+
+//     xps_buffer_t *buff = xps_http_res_serialize(http_res);
+//     set_to_client_buff(session, buff);
+//     xps_http_res_destroy(http_res);
+
+//     if (xps_pipe_create(session->core, DEFAULT_PIPE_BUFF_THRESH, session->file->source, session->file_sink) == NULL) {
+//       logger(LOG_ERROR, "session_process_request()", "failed to create file pipe");
+//       xps_session_destroy(session);
+//       return;
+//     }
+//   }
+// }
 
 void xps_session_destroy(xps_session_t *session) {
   /* validate parameters */
