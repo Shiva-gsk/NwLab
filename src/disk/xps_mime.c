@@ -16,6 +16,7 @@ xps_keyval_t mime_types[] = {
     {".txt", "text/plain"},
     {".png", "image/png"},
     {".pdf", "application/pdf"},
+    {".json", "application/json"},
     {".html", "text/html"},
     {".txt", "text/plain"},
     };

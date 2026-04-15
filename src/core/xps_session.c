@@ -450,7 +450,6 @@ void session_check_destroy(xps_session_t *session) {
   if (!flowing)
     xps_session_destroy(session);
 }
-
 void session_process_request(xps_session_t *session) {
     assert(session != NULL);
 
@@ -484,8 +483,45 @@ void session_process_request(xps_session_t *session) {
 
     session->lookup = lookup;
 
-    // ── File serve ───────────────────────────────────────────────────────
+    // ── File serve & Directory Browsing ──────────────────────────────────
     if (lookup->type == REQ_FILE_SERVE) {
+        
+        // --- STAGE 17: DIRECTORY BROWSING ---
+        if (lookup->dir_path != NULL) {
+            xps_buffer_t *dir_html = xps_directory_browsing(lookup->dir_path, session->http_req->path);
+            
+            if (dir_html == NULL) {
+                logger(LOG_ERROR, "session_process_request()", "Directory browsing failed");
+                xps_http_res_t *http_res = xps_http_res_create(session->core, HTTP_INTERNAL_SERVER_ERROR);
+                if (http_res == NULL) return;
+                xps_http_set_header(&http_res->headers, "Server", SERVER_NAME);
+                xps_buffer_t *buff = xps_http_res_serialize(http_res);
+                set_to_client_buff(session, buff);
+                xps_http_res_destroy(http_res);
+                return;
+            }
+
+            xps_http_res_t *http_res = xps_http_res_create(session->core, HTTP_OK);
+            if (http_res == NULL) {
+              xps_buffer_destroy(dir_html);
+                return; 
+            }
+            
+            xps_http_set_header(&http_res->headers, "Server", SERVER_NAME);
+            xps_http_set_header(&http_res->headers, "Content-Type", "text/html");
+            
+            // Set the generated HTML buffer as the HTTP response body
+            xps_http_res_set_body(http_res, dir_html);
+
+            // Serialize the response (including headers and the body)
+            xps_buffer_t *http_res_buff = xps_http_res_serialize(http_res);
+            set_to_client_buff(session, http_res_buff);
+            
+            xps_http_res_destroy(http_res);
+            return;
+        }
+
+        // --- STANDARD FILE SERVING (From Previous Stages) ---
         if (lookup->file_path == NULL) {
             xps_http_res_t *http_res = xps_http_res_create(session->core, HTTP_NOT_FOUND);
             if (http_res == NULL) return;

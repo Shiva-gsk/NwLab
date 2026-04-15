@@ -120,5 +120,6 @@ typedef void (*xps_handler_t)(void *ptr);
 #include "lib/parson/parson.h"
 #include "config/xps_config.h"
 #include "utils/xps_cliargs.h"
+#include "disk/xps_directory.h"
 
 #endif

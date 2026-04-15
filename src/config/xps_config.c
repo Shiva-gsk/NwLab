@@ -232,7 +232,31 @@ xps_config_lookup_t *xps_config_lookup(xps_config_t *config, xps_http_req_t *htt
         }
         else if (is_dir(resource_path))
         {
-            lookup->dir_path = resource_path;
+            bool index_found = false;
+
+            for (int i = 0; i < route->index.length; i++)
+            {
+                const char *index_file = route->index.data[i];
+                char *index_path = path_join(resource_path, index_file);
+
+                if (is_file(index_path))
+                {
+                    lookup->file_path = index_path;
+                    index_found = true;
+                    break;
+                }
+
+                free(index_path);
+            }
+
+            if (!index_found)
+            {
+                lookup->dir_path = resource_path;
+            }
+            else
+            {
+                free(resource_path);
+            }
         }
         else
         {
