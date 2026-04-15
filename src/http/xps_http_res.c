@@ -14,7 +14,7 @@ xps_http_res_t *xps_http_res_create(xps_core_t *core, u_int code){
         return NULL;
     }
     // Initialize the response
-    snprintf(http_res->response_line, sizeof(http_res->response_line), "HTTP/1.1 %u} %s\r\n", code, xps_http_status_text(code));
+    snprintf(http_res->response_line, sizeof(http_res->response_line), "HTTP/1.1 %u %s\r\n", code, xps_http_status_text(code));
     vec_init(&http_res->headers);
     http_res->body = NULL;
     // time_t now = time(NULL);
@@ -49,7 +49,7 @@ void xps_http_res_destroy(xps_http_res_t *res){
 
 xps_buffer_t *xps_http_res_serialize(xps_http_res_t *http_res) {
     if (http_res == NULL) return NULL;
-    xps_http_set_header(&(http_res->headers), "Server", SERVER_NAME);
+    // xps_http_set_header(&(http_res->headers), "Server", SERVER_NAME);
 
   xps_buffer_t *headers_str = xps_http_serialize_headers(&http_res->headers);
   if (headers_str == NULL) return NULL;

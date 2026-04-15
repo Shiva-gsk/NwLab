@@ -4,7 +4,7 @@
 void listener_connection_handler(void *ptr);
 
 
-xps_listener_t *xps_listener_create(xps_core_t *core, const char *host, u_int port) {
+xps_listener_t *xps_listener_create( const char *host, u_int port) {
   assert(host != NULL);
   assert(is_valid_port(port)); // Will be explained later
 
@@ -60,15 +60,12 @@ xps_listener_t *xps_listener_create(xps_core_t *core, const char *host, u_int po
   }
 
   // Init values
-  listener->core = core;
   listener->host = host;
   listener->port = port;
   listener->sock_fd = sock_fd;
 
   // Attach listener to loop
   // xps_loop_attach(core->loop, sock_fd, EPOLLIN, listener, listener_connection_handler, NULL, NULL);
-  xps_loop_attach(core->loop, sock_fd, EPOLLIN | EPOLLET, listener, listener_connection_handler, NULL, NULL);
-
   // Add listener to global listeners list
   // vec_push(&(core->listeners), listener);
 
