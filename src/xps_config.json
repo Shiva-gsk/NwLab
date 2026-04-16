@@ -3,18 +3,13 @@
 	"servers": [
 		{
 			"listeners": [{ "host": "0.0.0.0", "port": 8001 }],
-			"routes": [
+			 "routes": [
 				{
-					"req_path": "/",
-					"type": "file_serve",
-					"dir_path": "../public/",
-					"index": ["index.html"]
-				},
-				{
-					"req_path": "/hello",
-					"type": "redirect",
-					"http_status_code": 302,
-					"redirect_url": "http://localhost:8002/"
+				"req_path": "/",
+				"type": "file_serve",
+				"ip_whitelist": ["127.0.0.1", "0.0.0.0"],
+				"ip_blacklist": ["127.0.0.2"],
+				"dir_path": "../public/"
 				}
 			]
 		},

@@ -210,7 +210,8 @@ xps_config_lookup_t *xps_config_lookup(xps_config_t *config, xps_http_req_t *htt
 
     // 2. Handle File Serve
     if (lookup->type == REQ_FILE_SERVE)
-    {
+    {      
+        
         char *resource_path = path_join(route->dir_path, pathname);
         if (!is_abs_path(resource_path))
         {
@@ -474,5 +475,33 @@ static void parse_route(JSON_Object *route_object, xps_config_route_t *route)
             const char *upstream = json_array_get_string(upstreams_arr, i);
             vec_push(&route->upstreams, (void *)str_create(upstream));
         }
+    }
+    JSON_Array *ip_whitelist = json_object_get_array(route_object,  "ip_whitelist");
+    JSON_Array *ip_blacklist = json_object_get_array(route_object,  "ip_blacklist");
+
+    if(ip_whitelist && !ip_blacklist){
+        for(size_t i = 0; i < json_array_get_count(ip_whitelist); i++)
+        {
+            const char *ip = json_array_get_string(ip_whitelist, i);
+            vec_push(&(route->ip_whitelist), (void *)str_create(ip));
+        }
+    }else if(ip_blacklist && !ip_whitelist){
+        for(size_t i = 0; i < json_array_get_count(ip_blacklist); i++)
+        {
+            const char *ip = json_array_get_string(ip_blacklist, i);
+            vec_push(&(route->ip_blacklist), (void *)str_create(ip));
+        }
+    }else if(ip_whitelist && ip_blacklist) {
+        /*fill this*/
+        for(size_t i = 0; i < json_array_get_count(ip_whitelist); i++)
+        {
+            const char *ip = json_array_get_string(ip_whitelist, i);
+            vec_push(&(route->ip_whitelist), (void *)str_create(ip));
+        }
+        for(size_t i = 0; i < json_array_get_count(ip_blacklist); i++)
+        {
+            const char *ip = json_array_get_string(ip_blacklist, i);
+            vec_push(&(route->ip_blacklist), (void *)str_create(ip));
+        }   
     }
 }
